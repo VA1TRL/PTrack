@@ -73,7 +73,7 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   indomain = .true.
 
   if (.not.P_SIGMA) then
-    call interp_elh(nactive,host,x,y,el1,hp,elp)
+    call interp_elh(nactive,host,x0,y0,el1,hp,elp)
     z0 = elp - z0*(hp + elp)
   end if
 
