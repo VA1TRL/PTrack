@@ -4,6 +4,7 @@ module mod_tracking
   !==============================================================================|
   use mod_prec
   use mod_config
+  use mod_flow_field
   implicit none
   save
   !==============================================================================|
@@ -29,7 +30,6 @@ contains
     !==============================================================================|
     !  Read in lagrangian control parameters and initial lagrangian positions      |
     !==============================================================================|
-    use mod_flow_field
     implicit none
     !------------------------------------------------------------------------------|
     integer :: np_out, tdrift
@@ -90,7 +90,6 @@ contains
     !==============================================================================|
     !  Update particle positions, calculate scalar fields and particle velocities  |
     !==============================================================================|
-    use mod_flow_field
     implicit none
     !------------------------------------------------------------------------------|
     real(DP), dimension(ELEMENTS,SIGLAY) :: u_start, v_start, w_start
@@ -102,9 +101,7 @@ contains
     real(DP), dimension(NODES)           :: el_end
     !------------------------------------------------------------------------------|
     integer                   :: record
-    integer                   :: np_out
-    integer                   :: out_step
-    integer                   :: i1, i2, it, p
+    integer                   :: i1, i2, it
     real(DP)                  :: tmp1, tmp2
     logical, dimension(NDRFT) :: active
     !==============================================================================|
@@ -196,10 +193,9 @@ contains
     !   Release Delay  | REAL | Delay until the particle is released (seconds)     |
     !   Track Duration | REAL | Time to track the particle for (seconds)           |
     !==============================================================================|
-    use mod_flow_field
     implicit none
     !------------------------------------------------------------------------------|
-    integer :: i, j, k, nhi
+    integer :: i
     integer :: inlag
     logical :: fexist
     integer :: stat
@@ -272,7 +268,6 @@ contains
     !   TIME           | REAL | Time position was recorded (hours)                 |
     !   AGE            | REAL | Duration of particle track (hours)                 |
     !==============================================================================|
-    use mod_flow_field
     implicit none
     !------------------------------------------------------------------------------|
     integer :: i
