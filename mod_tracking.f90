@@ -8,16 +8,16 @@ module mod_tracking
   implicit none
   save
   !==============================================================================|
-  integer,  allocatable, dimension(:) :: LAG_ID       ! Unique identifier
+  integer,  allocatable, dimension(:) :: LAG_ID       ! Unique particle identifier
   integer,  allocatable, dimension(:) :: LAG_HOST     ! Element containing particle
   logical,  allocatable, dimension(:) :: LAG_INDOMAIN ! Particle is in the domain
   integer,  allocatable, dimension(:) :: LAG_RT       ! Release time for the particle (s)
   integer,  allocatable, dimension(:) :: LAG_AGE      ! Age of the particle (s)
   integer,  allocatable, dimension(:) :: LAG_TRACK    ! Lifetime of the particle (s)
+  real,     allocatable, dimension(:) :: LAG_D        ! Initial depth of the particle (m)
   real(DP), allocatable, dimension(:) :: LAG_XP       ! X position of particle (m)
   real(DP), allocatable, dimension(:) :: LAG_YP       ! Y position of particle (m)
   real(DP), allocatable, dimension(:) :: LAG_ZP       ! Z position of particle (sigma)
-  real(DP), allocatable, dimension(:) :: LAG_D        ! Initial depth of the particle (m)
 
   integer :: LAG_TIME ! Curent simulation time (s)
   integer :: LAG_DUR  ! Duration of simulation (s)
@@ -36,7 +36,7 @@ contains
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
-    ! Initialize particle tracking arrays                                          |
+    !  Initialize particle tracking arrays                                         |
     !------------------------------------------------------------------------------|
     allocate(LAG_ID(NDRFT),LAG_HOST(NDRFT))
     allocate(LAG_INDOMAIN(NDRFT),LAG_RT(NDRFT),LAG_AGE(NDRFT),LAG_TRACK(NDRFT))
@@ -51,7 +51,7 @@ contains
     !------------------------------------------------------------------------------|
     !  Calculate particle tracking start iteration                                 |
     !------------------------------------------------------------------------------|
-    ISLAG    = int(DAYST*86400.0_dp)/INSTP + 1
+    ISLAG = int(DAYST*86400.0)/INSTP + 1
 
     !------------------------------------------------------------------------------|
     !  Read initial partical positions from seed file                              |
@@ -61,8 +61,8 @@ contains
     !------------------------------------------------------------------------------|
     !  Calculate particle tracking end iteration                                   |
     !------------------------------------------------------------------------------|
-    LAG_DUR  = maxval(LAG_RT + LAG_TRACK)
-    IELAG    = LAG_DUR/INSTP + ISLAG
+    LAG_DUR = maxval(LAG_RT + LAG_TRACK)
+    IELAG   = LAG_DUR/INSTP + ISLAG
 
     !------------------------------------------------------------------------------|
     !  Print statistics on lagrangian tracking to output                           |
@@ -78,8 +78,6 @@ contains
     !  Write initial particle positions to output file                             |
     !------------------------------------------------------------------------------|
     call write_track
-
-    return
   end subroutine init_tracking
 
   !==============================================================================|
@@ -92,17 +90,18 @@ contains
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    real(DP), dimension(ELEMENTS,SIGLAY) :: u_start, v_start, w_start
-    real(DP), dimension(ELEMENTS,SIGLAY) :: u_end, v_end, w_end
-    real(DP), dimension(ELEMENTS,SIGLAY) :: u, v, w
+    real,     dimension(ELEMENTS,SIGLAY) :: u_start, u_end
+    real,     dimension(ELEMENTS,SIGLAY) :: v_start, v_end
+    real,     dimension(ELEMENTS,SIGLAY) :: w_start, w_end
+    real,     dimension(NODES)           :: el_start, el_end
+    real(DP), dimension(ELEMENTS,SIGLAY) :: u, up
+    real(DP), dimension(ELEMENTS,SIGLAY) :: v, vp
+    real(DP), dimension(ELEMENTS,SIGLAY) :: w, wp
     real(DP), dimension(NODES)           :: el, elp
-    real(DP), dimension(ELEMENTS,SIGLAY) :: up, vp, wp
-    real(DP), dimension(NODES)           :: el_start
-    real(DP), dimension(NODES)           :: el_end
     !------------------------------------------------------------------------------|
     integer                   :: record
     integer                   :: i1, i2, it
-    real(DP)                  :: tmp1, tmp2
+    real                      :: tmp1, tmp2
     logical, dimension(NDRFT) :: active
     !==============================================================================|
 
@@ -128,10 +127,10 @@ contains
       call read_flow(u_end,v_end,w_end,el_end,record)
 
       !------------------------------------------------------------------------------|
-      ! Loop within one forcing interval                                             |
+      !  Loop within one forcing interval                                            |
       !------------------------------------------------------------------------------|
       i1 = 1
-      i2 = INSTP/DTI ! caution of time step here
+      i2 = INSTP/DTI
       do it = i1,i2
         LAG_TIME = LAG_TIME + DTI
 
@@ -144,16 +143,16 @@ contains
         el = tmp1*el_start + tmp2*el_end
 
         !------------------------------------------------------------------------------|
-        ! Run the tracking simulation                                                  |
+        !  Run the tracking simulation                                                 |
         !------------------------------------------------------------------------------|
         call traject(up,u,vp,v,wp,w,elp,el)
 
         !------------------------------------------------------------------------------|
-        ! Write particle records to file                                               |
+        !  Write particle records to file                                              |
         !------------------------------------------------------------------------------|
         if (mod(LAG_TIME,DTOUT) == 0) call write_track
 
-        !--Time step update of velocity fields
+        ! Time step update of velocity fields
         up  = u
         vp  = v
         wp  = w
@@ -161,7 +160,7 @@ contains
       end do
 
       !------------------------------------------------------------------------------|
-      ! Hourly update of physical fields                                             |
+      !  Hourly update of physical fields                                            |
       !------------------------------------------------------------------------------|
       u_start = u_end
       v_start = v_end
@@ -171,7 +170,6 @@ contains
       write(*,*) "Finished: ",record,", sim time (s): ",LAG_TIME
     end do
     write(*,*) "== Finished Particle Tracking =="
-    return
   end subroutine run_tracking
 
   !==============================================================================|
@@ -180,9 +178,9 @@ contains
 
   subroutine read_seed
     !==============================================================================|
-    ! Read the initial partical positions from the input file                      |
+    !  Read the initial partical positions from the input file                     |
     !==============================================================================|
-    ! file format (By column, each row defines a diffrent particle)                |
+    !  file format (By column, each row defines a diffrent particle)               |
     !                                                                              |
     !   PARAMETER      | TYPE | DESCRIPTION                                        |
     !  ----------------|------|--------------------------------                    |
@@ -195,14 +193,14 @@ contains
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    integer :: i
-    integer :: inlag
-    logical :: fexist
-    integer :: stat
-    real(DP), dimension(ELEMENTS,SIGLAY) :: u, v, w
-    real(DP), dimension(NODES)           :: el
+    integer                              :: i
+    integer                              :: inlag
+    logical                              :: fexist
+    integer                              :: stat
+    real,     dimension(ELEMENTS,SIGLAY) :: u, v, w
+    real,     dimension(NODES)           :: el
     real(DP), dimension(NDRFT)           :: hp, elp
-    real(DP), dimension(NDRFT)           :: rt_in, track_in
+    real,     dimension(NDRFT)           :: rt_in, track_in
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
@@ -229,8 +227,8 @@ contains
     !------------------------------------------------------------------------------|
     !  Convert external hours to internal seconds                                  |
     !------------------------------------------------------------------------------|
-    LAG_RT = int(rt_in*3600.0_dp)
-    LAG_TRACK = int(track_in*3600.0_dp)
+    LAG_RT = int(rt_in*3600.0)
+    LAG_TRACK = int(track_in*3600.0)
 
     !------------------------------------------------------------------------------|
     !  Locate the particle in the domain                                           |
@@ -246,7 +244,6 @@ contains
     call interp_elh(NDRFT,LAG_HOST,LAG_XP,LAG_YP,el,hp,elp)
     LAG_ZP = LAG_D/(hp + elp)
     if (P_REL_B) LAG_ZP = 1.0_dp - LAG_ZP
-    return
   end subroutine read_seed
 
   !==============================================================================|
@@ -255,9 +252,9 @@ contains
 
   subroutine write_track
     !==============================================================================|
-    ! Write particle track to output file                                          |
+    !  Write particle track to output file                                         |
     !==============================================================================|
-    ! file format (By column, each row defines a diffrent particle)                |
+    !  file format (By column, each row defines a diffrent particle)               |
     !                                                                              |
     !   PARAMETER      | TYPE | DESCRIPTION                                        |
     !  ----------------|------|--------------------------------                    |
@@ -270,11 +267,11 @@ contains
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    integer :: i
-    integer :: outf
-    logical :: fexist
-    real(DP), dimension(ELEMENTS,SIGLAY) :: u, v, w
-    real(DP), dimension(NODES)           :: el
+    integer                              :: i
+    integer                              :: outf
+    logical                              :: fexist
+    real,     dimension(ELEMENTS,SIGLAY) :: u, v, w
+    real,     dimension(NODES)           :: el
     real(DP), dimension(NDRFT)           :: hp, elp
     real(DP), dimension(NDRFT)           :: z_pos
     !==============================================================================|

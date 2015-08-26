@@ -8,7 +8,7 @@ module mod_config
   !==============================================================================|
 
   integer  :: NDRFT   ! Number of particles being tracked
-  real(DP) :: DAYST		! Starting day relitive to the forcing NetCDF file start (days)
+  real     :: DAYST		! Starting day relitive to the forcing NetCDF file start (days)
   integer  :: INSTP   ! Time step for NetCDF input file (seconds)
   integer  :: DTI     ! Time step for particle track resolution (seconds)
   integer  :: DTOUT   ! Time step for output records (seconds)
@@ -152,8 +152,6 @@ contains
       i = PScanMsg(iscan)
       stop 
     end if
-
-    return
   end subroutine init_model
 
 end module mod_config

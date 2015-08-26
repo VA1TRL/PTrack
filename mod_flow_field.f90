@@ -4,6 +4,7 @@ module mod_flow_field
   !==============================================================================|
   use mod_prec
   use mod_config
+  use netcdf
   implicit none
   save
   !==============================================================================|
@@ -20,45 +21,46 @@ module mod_flow_field
   !------------------------------------------------------------------------------|
   !  Grid co-ordinates                                                           |
   !------------------------------------------------------------------------------|
-  real(DP), allocatable, dimension(:)   :: XP, YP       ! Node (x,y) co-ordinates (meters)
-  real(DP), allocatable, dimension(:)   :: XC, YC	      ! Element, triangle center, (x,y) co-ordinates (meters)
-  real(DP), allocatable, dimension(:)   :: Z_LEV, Z_LAY ! Sigma co-ordinate
-  real(DP), allocatable, dimension(:)   :: H            ! Bathymetric depth at node (meters)
-  integer,  allocatable, dimension(:)   :: NTVE         ! Number of elements sourounding each node
-  integer,  allocatable, dimension(:,:) :: NV           ! Corners nodes of the elements/grid triangles
-  integer,  allocatable, dimension(:,:) :: NBE          ! Elements sourounding each element
-  integer,  allocatable, dimension(:,:) :: NBVE         ! Elements sourounding each node
+  real,    allocatable, dimension(:)   :: XP, YP       ! Node (x,y) co-ordinates (meters)
+  real,    allocatable, dimension(:)   :: XC, YC       ! Element, triangle center, (x,y) co-ordinates (meters)
+  real,    allocatable, dimension(:)   :: Z_LEV, Z_LAY ! Sigma co-ordinates
+  real,    allocatable, dimension(:)   :: H            ! Bathymetric depth at node (meters)
+  integer, allocatable, dimension(:)   :: NTVE         ! Number of elements sourounding each node
+  integer, allocatable, dimension(:,:) :: NV           ! Corners nodes of the elements/grid triangles
+  integer, allocatable, dimension(:,:) :: NBE          ! Elements sourounding each element
+  integer, allocatable, dimension(:,:) :: NBVE         ! Elements sourounding each node
 
   !------------------------------------------------------------------------------|
   !  Shape coefficient arrays and control volume metrics                         |
   !------------------------------------------------------------------------------|
-  real(DP), allocatable, dimension(:,:) :: A1U
-  real(DP), allocatable, dimension(:,:) :: A2U
-  real(DP), allocatable, dimension(:,:) :: AWX
-  real(DP), allocatable, dimension(:,:) :: AWY
-  real(DP), allocatable, dimension(:,:) :: AW0
+  real, allocatable, dimension(:,:) :: A1U
+  real, allocatable, dimension(:,:) :: A2U
+  real, allocatable, dimension(:,:) :: AWX
+  real, allocatable, dimension(:,:) :: AWY
+  real, allocatable, dimension(:,:) :: AW0
 contains
 
   subroutine ncd_read_grid
     !==============================================================================|
-    ! Read grid shape/dimmension information from NetCDF file                      |
+    !  Read grid shape/dimmension information from NetCDF file                     |
     !==============================================================================|
-    use netcdf
     implicit none
     !------------------------------------------------------------------------------|
-    integer :: ierr
-    integer :: dimid, varid, fid
-    integer :: maxelem
-    character(len=NF90_MAX_NAME) :: temp
-    real(DP), allocatable, dimension(:,:) :: tmp
+    integer                           :: ierr
+    integer                           :: dimid, varid, fid
+    integer                           :: maxelem
+    character(len=NF90_MAX_NAME)      :: temp
+    real, allocatable, dimension(:,:) :: tmp
     !==============================================================================|
 
-    ! Open NetCDF data file
+    !------------------------------------------------------------------------------|
+    !  Open NetCDF data file                                                       |
+    !------------------------------------------------------------------------------|
     ierr = nf90_open(trim(GRIDFN),NF90_NOWRITE,fid)
     call handle_ncerror(ierr)
 
     !------------------------------------------------------------------------------|
-    ! Get model dimensions                                                         |
+    !  Get model dimensions                                                        |
     !------------------------------------------------------------------------------|
     ierr = nf90_inq_dimid(fid,"nele",dimid)
     call handle_ncerror(ierr)
@@ -91,7 +93,7 @@ contains
     call handle_ncerror(ierr)
 
     !------------------------------------------------------------------------------|
-    ! Allocate space for grid information                                          |
+    !  Allocate space for grid information                                         |
     !------------------------------------------------------------------------------|
     allocate(XP(NODES),YP(NODES))
     allocate(XC(ELEMENTS),YC(ELEMENTS))
@@ -104,7 +106,7 @@ contains
     allocate(NTVE(NODES),NBVE(NODES,maxelem))
 
     !------------------------------------------------------------------------------|
-    ! Get node co-ordinates                                                        |
+    !  Get node co-ordinates                                                       |
     !------------------------------------------------------------------------------|
     ierr = nf90_inq_varid(fid,"x",varid)
     call handle_ncerror(ierr)
@@ -168,7 +170,7 @@ contains
     call handle_ncerror(ierr)
 
     !------------------------------------------------------------------------------|
-    ! Get interpolation parameters                                                 |
+    !  Get interpolation parameters                                                |
     !------------------------------------------------------------------------------|
     ierr = nf90_inq_varid(fid,"a1u",varid)
     call handle_ncerror(ierr)
@@ -198,8 +200,6 @@ contains
     ! Close file
     ierr = nf90_close(fid)
     call handle_ncerror(ierr)
-
-    return
   end subroutine ncd_read_grid
 
   !==============================================================================|
@@ -208,25 +208,26 @@ contains
 
   subroutine read_flow(u,v,w,el,time)
     !==============================================================================|
-    ! Read flow field vectors from NetCDF file                                     |
+    !  Read flow field vectors from NetCDF file                                    |
     !==============================================================================|
-    use netcdf
     implicit none
     !------------------------------------------------------------------------------|
-    real(DP), dimension(ELEMENTS,SIGLAY), intent(out) :: u, v, w
-    real(DP), dimension(NODES),           intent(out) :: el
-    integer,                              intent(in)  :: time
+    real, dimension(ELEMENTS,SIGLAY), intent(out) :: u, v, w
+    real, dimension(NODES),           intent(out) :: el
+    integer,                          intent(in)  :: time
     !------------------------------------------------------------------------------|
     integer :: ierr
     integer :: fid, varid
     !==============================================================================|
 
-    ! Open NetCDF data file
+    !------------------------------------------------------------------------------|
+    !  Open NetCDF data file                                                       |
+    !------------------------------------------------------------------------------|
     ierr = nf90_open(trim(GRIDFN),NF90_NOWRITE,fid)
     call handle_ncerror(ierr)
 
     !------------------------------------------------------------------------------|
-    ! Read flow field data from NetCDF file at specified time index                |
+    !  Read flow field data from NetCDF file at specified time index               |
     !------------------------------------------------------------------------------|
 
     ! Free surface elevation
@@ -256,7 +257,6 @@ contains
     ! Close file
     ierr = nf90_close(fid)
     call handle_ncerror(ierr)
-    return
   end subroutine read_flow
 
   !==============================================================================|
@@ -265,9 +265,8 @@ contains
 
   subroutine handle_ncerror(errid)
     !==============================================================================|
-    ! Check for and handle NetCDF file I/O errors                                  |
+    !  Check for and handle NetCDF file I/O errors                                 |
     !==============================================================================|
-    use netcdf
     implicit none
     !------------------------------------------------------------------------------|
     integer, intent(in) :: errid

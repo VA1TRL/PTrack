@@ -8,17 +8,18 @@ subroutine fhe(x,y,host,indomain)
   use mod_flow_field
   implicit none
   !------------------------------------------------------------------------------|
-  real(DP), intent(in)		:: x,y
+  real(DP), intent(in)		:: x, y
   integer,  intent(inout)	:: host
   logical,  intent(out)		:: indomain
-  logical :: isintriangle
+  logical                 :: isintriangle
   !------------------------------------------------------------------------------|
   integer                 :: i, j, iney, ncheck
   !==============================================================================|
 
   indomain = .true.
 
-  if (isintriangle(host,x,y)) then ! Particle remains in element
+  ! Check if the particle has moved to a diffrent mesh element
+  if (isintriangle(host,x,y)) then
     return
   end if
 
@@ -36,8 +37,6 @@ subroutine fhe(x,y,host,indomain)
 
   ! Try harder
   call fhe_robust(x,y,host,indomain)
-
-  return
 end subroutine fhe
 
 !==============================================================================|
@@ -61,21 +60,21 @@ subroutine fhe_robust(x,y,host,indomain)
   logical,  intent(inout) :: indomain
   logical	                :: isintriangle
   !------------------------------------------------------------------------------|
-  integer                       :: min_loc
-  real(DP), dimension(ELEMENTS) :: radlist
-  real(DP)                      :: radlast
-  integer, dimension(1)         :: locij
-  integer                       :: peng
+  integer                      :: min_loc
+  real,    dimension(ELEMENTS) :: radlist
+  real                         :: radlast
+  integer, dimension(1)        :: locij
+  integer                      :: peng
   !==============================================================================|
 
   if (.not.indomain) return
   radlist = (XC - x)**2 + (YC - y)**2 ! faster jm
-  radlast = 0.0_dp
+  radlast = 0.0
   peng = 0
 
   do
     peng = peng + 1
-    locij = minloc(radlist,radlist>radlast)
+    locij = minloc(radlist, radlist > radlast)
     min_loc = locij(1)
 
     if (min_loc == 0 .or. peng >= 32) then
@@ -90,8 +89,6 @@ subroutine fhe_robust(x,y,host,indomain)
       return
     end if
   end do
-
-  return
 end subroutine fhe_robust
 
 !==============================================================================|
@@ -109,8 +106,8 @@ logical function isintriangle(ele,x,y)
   integer,  intent(in) :: ele
   real(DP), intent(in) :: x, y
   !------------------------------------------------------------------------------|
-  real(DP) :: f1, f2, f3
-  real(DP), dimension(3) :: xtri, ytri
+  real               :: f1, f2, f3
+  real, dimension(3) :: xtri, ytri
   !==============================================================================|
  
   xtri = XP(NV(ele,1:3))
@@ -120,12 +117,10 @@ logical function isintriangle(ele,x,y)
   f2 = (y-ytri(3))*(xtri(1)-xtri(3)) - (x-xtri(3))*(ytri(1)-ytri(3))
   f3 = (y-ytri(2))*(xtri(3)-xtri(2)) - (x-xtri(2))*(ytri(3)-ytri(2))
 
-  if (f1*f3 >= 0.0_dp .and. f3*f2 >= 0.0_dp) then
+  if (f1*f3 >= 0.0 .and. f3*f2 >= 0.0) then
     isintriangle = .true.
   else
     isintriangle = .false.
   end if
-
-  return
 end function isintriangle
 

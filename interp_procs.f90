@@ -12,25 +12,28 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   use mod_flow_field
   implicit none
   !------------------------------------------------------------------------------|
-  real(DP), dimension(ELEMENTS,SIGLAY), intent(in) :: u1, u2, v1, v2, w1, w2
-  real(DP), dimension(NODES), intent(in) :: el1, el2
+  real(DP), dimension(ELEMENTS,SIGLAY), intent(in) :: u1, u2
+  real(DP), dimension(ELEMENTS,SIGLAY), intent(in) :: v1, v2
+  real(DP), dimension(ELEMENTS,SIGLAY), intent(in) :: w1, w2
+  real(DP), dimension(NODES),           intent(in) :: el1, el2
   !------------------------------------------------------------------------------|
-  integer :: i, nactive
-  integer :: ns
-  integer,  dimension(NDRFT) :: ai
-  real(DP), allocatable, dimension(:) :: x0, y0, z0, depth
-  real(DP), allocatable, dimension(:) :: x, y, z
-  real(DP), allocatable, dimension(:) :: hp, elp
+  integer                               :: i, nactive
+  integer                               :: ns
+  integer,  dimension(NDRFT)            :: ai
+  real(DP), dimension(ELEMENTS,SIGLAY)  :: u, v, w
+  real(DP), dimension(NODES)            :: el
+  real(DP), allocatable, dimension(:)   :: x0, y0, z0
+  real(DP), allocatable, dimension(:)   :: x, y, z
+  real(DP), allocatable, dimension(:)   :: hp, elp
   real(DP), allocatable, dimension(:,:) :: vx, vy, vz
-  integer,  allocatable, dimension(:) :: host
-  logical,  allocatable, dimension(:) :: indomain
-  real(DP), dimension(ELEMENTS,SIGLAY) :: ul, vl, wl
-  real(DP), dimension(NODES) :: ell
+  real,     allocatable, dimension(:)   :: depth
+  integer,  allocatable, dimension(:)   :: host
+  logical,  allocatable, dimension(:)   :: indomain
   !------------------------------------------------------------------------------|
-  integer,  parameter :: mstage = 4
-  real(DP), parameter, dimension(mstage) :: a_rk = [0.0_dp, 0.5_dp, 0.5_dp, 1.0_dp]
-  real(DP), parameter, dimension(mstage) :: b_rk = [1.0_dp/6.0_dp, 1.0_dp/3.0_dp, 1.0_dp/3.0_dp, 1.0_dp/6.0_dp]
-  real(DP), parameter, dimension(mstage) :: c_rk = [0.0_dp, 0.5_dp, 0.5_dp, 1.0_dp]
+  integer, parameter                    :: mstage = 4
+  real,    parameter, dimension(mstage) :: a_rk = [0.0, 0.5, 0.5, 1.0]
+  real,    parameter, dimension(mstage) :: b_rk = [1.0/6.0, 1.0/3.0, 1.0/3.0, 1.0/6.0]
+  real,    parameter, dimension(mstage) :: c_rk = [0.0, 0.5, 0.5, 1.0]
   !==============================================================================|
 
   !------------------------------------------------------------------------------|
@@ -64,9 +67,9 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   vz(0,:) = 0.0_dp
 
   do i = 1,nactive
-    x0(i) = LAG_XP(ai(i))
-    y0(i) = LAG_YP(ai(i))
-    z0(i) = LAG_ZP(ai(i))
+    x0(i)   = LAG_XP(ai(i))
+    y0(i)   = LAG_YP(ai(i))
+    z0(i)   = LAG_ZP(ai(i))
     host(i) = LAG_HOST(ai(i))
     if (F_DEPTH) depth(i) = LAG_D(ai(i))
   end do
@@ -80,7 +83,7 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   !------------------------------------------------------------------------------|
   !  Loop over RK Stages                                                         |
   !------------------------------------------------------------------------------|
-  do ns=1,mstage
+  do ns = 1,mstage
 
     !------------------------------------------------------------------------------|
     !  Particle position at stage N                                                |
@@ -95,16 +98,16 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
     !------------------------------------------------------------------------------|
     !  Calculate velocity field for stage N using c_rk coefficients                |
     !------------------------------------------------------------------------------|
-    ul  = (1.0_dp - c_rk(ns))*u1 + c_rk(ns)*u2
-    vl  = (1.0_dp - c_rk(ns))*v1 + c_rk(ns)*v2
-    wl  = (1.0_dp - c_rk(ns))*w1 + c_rk(ns)*w2
-    ell = (1.0_dp - c_rk(ns))*el1 + c_rk(ns)*el2
+    u  = (1.0_dp - c_rk(ns))*u1 + c_rk(ns)*u2
+    v  = (1.0_dp - c_rk(ns))*v1 + c_rk(ns)*v2
+    w  = (1.0_dp - c_rk(ns))*w1 + c_rk(ns)*w2
+    el = (1.0_dp - c_rk(ns))*el1 + c_rk(ns)*el2
 
     !------------------------------------------------------------------------------|
     !  We need the particle's sigma position to determine the stage ns velocity    |
     !------------------------------------------------------------------------------|
     if (F_DEPTH) then
-      call interp_elh(nactive,host,x,y,ell,hp,elp)
+      call interp_elh(nactive,host,x,y,el,hp,elp)
       z = depth
       where (z > hp + elp) z = hp + elp ! Can't be bellow the sea floor
       z = z/(hp + elp)
@@ -113,7 +116,7 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
         where (z > 1.0) z = 2.0_dp - z ! Reflect off bottom
         where (z < 0.0) z = 0.0        ! Can't be above water surface
       else
-        call interp_elh(nactive,host,x,y,ell,hp,elp)
+        call interp_elh(nactive,host,x,y,el,hp,elp)
         where (z < 0.0 - hp) z = (0.0_dp - hp) - (z + hp) ! Reflect off bottom
         where (z > elp) z = elp ! Can't be above water surface
         z = (elp - z)/(hp + elp)
@@ -124,10 +127,10 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
     !  Evaluate velocity (u,v,w) at stage ns particle position                     |
     !------------------------------------------------------------------------------|
     z = 0.0_dp - z
-    call interp_v(nactive,host,x,y,z,ul,vl,wl,vx(ns,:),vy(ns,:),vz(ns,:))
+    call interp_v(nactive,host,x,y,z,u,v,w,vx(ns,:),vy(ns,:),vz(ns,:))
 
     if (P_SIGMA) then
-      call interp_elh(nactive,host,x,y,ell,hp,elp)
+      call interp_elh(nactive,host,x,y,el,hp,elp)
       vz(ns,:) = (0.0_dp - vz(ns,:))/(hp + elp) ! m/s up -> sigma/s down
     end if
   end do
@@ -138,7 +141,7 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   x = x0
   y = y0
   z = z0
-  do ns=1,mstage
+  do ns = 1,mstage
     x = x + float(DTI)*vx(ns,:)*b_rk(ns)
     y = y + float(DTI)*vy(ns,:)*b_rk(ns)
     z = z + float(DTI)*vz(ns,:)*b_rk(ns)
@@ -172,14 +175,13 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   !  Update particle tracking data arrays                                        |
   !------------------------------------------------------------------------------|
   do i = 1,nactive
-    LAG_XP(ai(i)) = x(i)
-    LAG_YP(ai(i)) = y(i)
-    LAG_ZP(ai(i)) = z(i)
-    LAG_HOST(ai(i)) = host(i)
+    LAG_XP(ai(i))       = x(i)
+    LAG_YP(ai(i))       = y(i)
+    LAG_ZP(ai(i))       = z(i)
+    LAG_HOST(ai(i))     = host(i)
     LAG_INDOMAIN(ai(i)) = indomain(i)
-    LAG_AGE(ai(i)) = LAG_AGE(ai(i)) + DTI
+    LAG_AGE(ai(i))      = LAG_AGE(ai(i)) + DTI
   end do
-  return
 end subroutine traject
 
 !==============================================================================|
@@ -197,19 +199,19 @@ subroutine interp_v(np,host,x,y,z,uin,vin,win,u,v,w)
   use mod_flow_field
   implicit none
   !------------------------------------------------------------------------------|
-  integer, intent(in) :: np
-  real(DP), intent(in), dimension(ELEMENTS,SIGLAY) :: uin, vin, win
-  integer, intent(in), dimension(np) :: host
-  real(DP), intent(in), dimension(np) :: x, y, z
-  real(DP), intent(out), dimension(np) :: u, v, w
+  integer,                              intent(in)  :: np
+  integer,  dimension(np),              intent(in)  :: host
+  real(DP), dimension(ELEMENTS,SIGLAY), intent(in)  :: uin, vin, win
+  real(DP), dimension(np),              intent(in)  :: x, y, z
+  real(DP), dimension(np),              intent(out) :: u, v, w
   !------------------------------------------------------------------------------|
-  integer :: e1, e2, e3, k1, k2
-  real(DP) :: x0c, y0c
-  real(DP) :: dudx, dudy, dvdx, dvdy, dwdx, dwdy
-  real(DP) :: ue01, ue02, ve01, ve02, we01, we02
-  real(DP) :: zf1,zf2
+  integer                     :: e1, e2, e3, k1, k2
+  real(DP)                    :: x0c, y0c
+  real(DP)                    :: dudx, dudy, dvdx, dvdy, dwdx, dwdy
+  real(DP)                    :: ue01, ue02, ve01, ve02, we01, we02
+  real(DP)                    :: zf1,zf2
   real(DP), dimension(SIGLAY) :: dzp
-  integer	:: npp, i, j, k
+  integer	                    :: npp, i, j, k
   !==============================================================================|
 
   u = 0.0_dp
@@ -217,7 +219,7 @@ subroutine interp_v(np,host,x,y,z,uin,vin,win,u,v,w)
   w = 0.0_dp
 
   do j = 1,np
-    i = host(j)
+    i   = host(j)
     e1  = NBE(i,1)
     e2  = NBE(i,2)
     e3  = NBE(i,3)
@@ -286,10 +288,9 @@ subroutine interp_v(np,host,x,y,z,uin,vin,win,u,v,w)
     !  Interpolate particle velocity between two sigma layers                      |
     !------------------------------------------------------------------------------|
     u(j) = ue01*zf1 + ue02*zf2
-    v(j) = ve01*zf1 + ve02*zf2 
-    w(j) = we01*zf1 + we02*zf2 ! DW
+    v(j) = ve01*zf1 + ve02*zf2
+    w(j) = we01*zf1 + we02*zf2
   end do
-  return
 end subroutine interp_v
 
 !==============================================================================|
@@ -307,14 +308,15 @@ subroutine interp_elh(np,host,x,y,el,hp,elp)
   use mod_flow_field
   implicit none
   !------------------------------------------------------------------------------|
-  integer,  intent(in)                    :: np
-  integer,  intent(in),  dimension(np)    :: host
-  real(DP), intent(in),  dimension(np)    :: x, y
-  real(DP), intent(in),  dimension(NODES) :: el
-  real(DP), intent(out), dimension(np)    :: hp, elp
+  integer,                    intent(in)  :: np
+  integer,  dimension(np),    intent(in)  :: host
+  real(DP), dimension(np),    intent(in)  :: x, y
+  real(DP), dimension(NODES), intent(in)  :: el
+  real(DP), dimension(np),    intent(out) :: hp, elp
   !------------------------------------------------------------------------------|
   integer,  dimension(np) :: n1, n2, n3
-  real(DP), dimension(np) :: h0, hx, hy, e0, ex, ey
+  real(DP), dimension(np) :: h0, hx, hy
+  real(DP), dimension(np) :: e0, ex, ey
   real(DP), dimension(np) :: x0c, y0c
   !==============================================================================|
 
@@ -342,6 +344,5 @@ subroutine interp_elh(np,host,x,y,el,hp,elp)
   ex = AWX(host,1)*el(n1) + AWX(host,2)*el(n2) + AWX(host,3)*el(n3)
   ey = AWY(host,1)*el(n1) + AWY(host,2)*el(n2) + AWY(host,3)*el(n3)
   elp = e0 + ex*x0c + ey*y0c
-  return
 end subroutine interp_elh
 
