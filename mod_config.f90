@@ -6,16 +6,14 @@ module mod_config
   implicit none
   save
   !==============================================================================|
+  integer :: DTI     ! Time step for particle track resolution (seconds)
+  integer :: DTOUT   ! Time step for output records (seconds)
 
-  integer  :: NDRFT   ! Number of particles being tracked
-  real     :: DAYST		! Starting day relitive to the forcing NetCDF file start (days)
-  integer  :: INSTP   ! Time step for NetCDF input file (seconds)
-  integer  :: DTI     ! Time step for particle track resolution (seconds)
-  integer  :: DTOUT   ! Time step for output records (seconds)
+  logical :: F_DEPTH
+  logical :: P_SIGMA
+  logical :: P_REL_B
+  logical :: OUT_SIGMA
 
-  logical  :: F_DEPTH, P_SIGMA, P_REL_B, OUT_SIGMA ! Vertical coordinate config (see below)
-
-  !--File Specifiers ------------------------------------------------------------!
   character(len=80) :: CASENAME   ! Name of curent run configuration file
   character(len=80) :: OUTFN      ! Name of output data file
   character(len=80) :: GRIDFN     ! Name of NetCDF flow-field/grid input file
@@ -44,41 +42,11 @@ contains
     end if
 
     !------------------------------------------------------------------------------|
-    !  NDRFT : Number of particles in tracking simulation                          |
-    !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"NDRFT",iscal = NDRFT)
-    if(iscan /= 0) then
-      write(*,*) "ERROR reading NDRFT from: ", CASENAME
-      i = PScanMsg(iscan)
-      stop 
-    end if
-
-    !------------------------------------------------------------------------------|
-    !  INSTP : NetCDF input file time step (seconds)                               |
-    !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"INSTP",iscal = INSTP)
-    if(iscan /= 0) then
-      write(*,*) "ERROR reading INSTP from: ", CASENAME
-      i = PScanMsg(iscan)
-      stop 
-    end if
-
-    !------------------------------------------------------------------------------|
     !  DTOUT : Output interval (seconds)                                           |
     !------------------------------------------------------------------------------|
     iscan = scan_file(CASENAME,"DTOUT",iscal = DTOUT)
     if(iscan /= 0) then
       write(*,*) "ERROR reading DTOUT from: ", CASENAME
-      i = PScanMsg(iscan)
-      stop 
-    end if
-
-    !------------------------------------------------------------------------------|
-    !  DAYST : Delay before particle tracking begins (relitive to NetCDF file)     |
-    !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"DAYST",fscal = DAYST)
-    if(iscan /= 0) then
-      write(*,*) "ERROR reading DAYST from: ", CASENAME
       i = PScanMsg(iscan)
       stop 
     end if

@@ -16,7 +16,6 @@ module mod_flow_field
   integer :: NODES     ! Number of nodes (triangle corners) in the mesh
   integer :: SIGLEV    ! Number of sigma levels
   integer :: SIGLAY    ! Number of sigma layers
-  integer :: N_TIME    ! Number of time records in NetCDF file
 
   !------------------------------------------------------------------------------|
   !  Grid co-ordinates                                                           |
@@ -38,19 +37,29 @@ module mod_flow_field
   real, allocatable, dimension(:,:) :: AWX
   real, allocatable, dimension(:,:) :: AWY
   real, allocatable, dimension(:,:) :: AW0
+
+  !------------------------------------------------------------------------------|
+  !  NetCDF flow-field records covering the current simulation time              |
+  !------------------------------------------------------------------------------|
+  real, allocatable, dimension(:,:) :: U_START, U_END
+  real, allocatable, dimension(:,:) :: V_START, V_END
+  real, allocatable, dimension(:,:) :: W_START, W_END
+  real, allocatable, dimension(:)   :: EL_START, EL_END
+  real                              :: T_START, T_END
+  integer                           :: NC_RECORD
 contains
 
-  subroutine ncd_read_grid
+  subroutine init_flow_field
     !==============================================================================|
-    !  Read grid shape/dimmension information from NetCDF file                     |
+    !  Read grid shape/dimmension information from NetCDF file and allocate space  |
+    !  for the data arrays.                                                        |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    integer                           :: ierr
-    integer                           :: dimid, varid, fid
-    integer                           :: maxelem
-    character(len=NF90_MAX_NAME)      :: temp
-    real, allocatable, dimension(:,:) :: tmp
+    integer                      :: ierr
+    integer                      :: maxelem
+    integer                      :: dimid, fid
+    character(len=NF90_MAX_NAME) :: temp
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
@@ -82,14 +91,15 @@ contains
     ierr = nf90_inquire_dimension(fid,dimid,temp,SIGLEV)
     call handle_ncerror(ierr)
 
-    ierr = nf90_inq_dimid(fid,"time",dimid)
-    call handle_ncerror(ierr)
-    ierr = nf90_inquire_dimension(fid,dimid,temp,N_TIME)
-    call handle_ncerror(ierr)
-
     ierr = nf90_inq_dimid(fid,"maxelem",dimid)
     call handle_ncerror(ierr)
     ierr = nf90_inquire_dimension(fid,dimid,temp,maxelem)
+    call handle_ncerror(ierr)
+
+    !------------------------------------------------------------------------------|
+    !  Close file                                                                  |
+    !------------------------------------------------------------------------------|
+    ierr = nf90_close(fid)
     call handle_ncerror(ierr)
 
     !------------------------------------------------------------------------------|
@@ -104,6 +114,38 @@ contains
     allocate(AWX(ELEMENTS,3),AWY(ELEMENTS,3))
     allocate(NV(ELEMENTS,3),NBE(ELEMENTS,3))
     allocate(NTVE(NODES),NBVE(NODES,maxelem))
+    allocate(U_START(ELEMENTS,SIGLAY),U_END(ELEMENTS,SIGLAY))
+    allocate(V_START(ELEMENTS,SIGLAY),V_END(ELEMENTS,SIGLAY))
+    allocate(W_START(ELEMENTS,SIGLAY),W_END(ELEMENTS,SIGLAY))
+    allocate(EL_START(NODES),EL_END(NODES))
+
+    !------------------------------------------------------------------------------|
+    !  Initialize grid information arrays                                          |
+    !------------------------------------------------------------------------------|
+    call ncd_read_grid
+    NC_RECORD = -1
+  end subroutine init_flow_field
+
+  !==============================================================================|
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+  !==============================================================================|
+
+  subroutine ncd_read_grid
+    !==============================================================================|
+    !  Read the finite element mesh from the NetCDF flow-field file                |
+    !==============================================================================|
+    implicit none
+    !------------------------------------------------------------------------------|
+    integer                           :: ierr
+    integer                           :: dimid, varid, fid
+    real, allocatable, dimension(:,:) :: tmp
+    !==============================================================================|
+
+    !------------------------------------------------------------------------------|
+    !  Open NetCDF data file                                                       |
+    !------------------------------------------------------------------------------|
+    ierr = nf90_open(trim(GRIDFN),NF90_NOWRITE,fid)
+    call handle_ncerror(ierr)
 
     !------------------------------------------------------------------------------|
     !  Get node co-ordinates                                                       |
@@ -197,7 +239,9 @@ contains
     ierr = nf90_get_var(fid,varid,AWY)
     call handle_ncerror(ierr)
 
-    ! Close file
+    !------------------------------------------------------------------------------|
+    !  Close file                                                                  |
+    !------------------------------------------------------------------------------|
     ierr = nf90_close(fid)
     call handle_ncerror(ierr)
   end subroutine ncd_read_grid
@@ -206,7 +250,63 @@ contains
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine read_flow(u,v,w,el,time)
+  subroutine get_flow_at(u,v,w,el,time)
+    !==============================================================================|
+    !  Get the flow field corrosponding to the provided time (MJD format) by       |
+    !  interpolating between the time-adjacent NetCDF records.                     |
+    !==============================================================================|
+    implicit none
+    !------------------------------------------------------------------------------|
+    real(DP), dimension(ELEMENTS,SIGLAY), intent(out) :: u, v, w
+    real(DP), dimension(NODES),           intent(out) :: el
+    real,                                 intent(in)  :: time
+    !------------------------------------------------------------------------------|
+    real :: frac_start, frac_end
+    !==============================================================================|
+
+    !------------------------------------------------------------------------------|
+    !  Initialize flow field data on the first run of this subroutine              |
+    !------------------------------------------------------------------------------|
+    if (NC_RECORD < 0) then
+      NC_RECORD = timeIndex(time)
+      call read_flow(U_START,V_START,W_START,EL_START,T_START,NC_RECORD)
+      NC_RECORD = NC_RECORD + 1
+      call read_flow(U_END,V_END,W_END,EL_END,T_END,NC_RECORD)
+    end if
+
+    !------------------------------------------------------------------------------|
+    !  Update forcing records if nessesairy                                        |
+    !------------------------------------------------------------------------------|
+    if (time > T_END) then
+      write(*,*) "Done Processing: ",NC_RECORD,", simulation time (mjd): ",time
+
+      U_START   = U_END
+      V_START   = V_END
+      W_START   = W_END
+      EL_START  = EL_END
+      T_START   = T_END
+      NC_RECORD = NC_RECORD + 1
+
+      call read_flow(U_END,V_END,W_END,EL_END,T_END,NC_RECORD)
+    end if
+
+    !------------------------------------------------------------------------------|
+    !  Interpolate velocity field values to the current simulation time            |
+    !------------------------------------------------------------------------------|
+    frac_start = (T_END - time)/(T_END - T_START)
+    frac_end   = (time - T_START)/(T_END - T_START)
+
+    u  = frac_start*U_START  + frac_end*U_END
+    v  = frac_start*V_START  + frac_end*V_END
+    w  = frac_start*W_START  + frac_end*W_END
+    el = frac_start*EL_START + frac_end*EL_END
+  end subroutine get_flow_at
+
+  !==============================================================================|
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+  !==============================================================================|
+
+  subroutine read_flow(u,v,w,el,time,n)
     !==============================================================================|
     !  Read flow field vectors from NetCDF file                                    |
     !==============================================================================|
@@ -214,10 +314,12 @@ contains
     !------------------------------------------------------------------------------|
     real, dimension(ELEMENTS,SIGLAY), intent(out) :: u, v, w
     real, dimension(NODES),           intent(out) :: el
-    integer,                          intent(in)  :: time
+    real,                             intent(out) :: time
+    integer,                          intent(in)  :: n
     !------------------------------------------------------------------------------|
-    integer :: ierr
-    integer :: fid, varid
+    integer            :: ierr
+    integer            :: fid, varid
+    real, dimension(1) :: tmp
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
@@ -230,34 +332,107 @@ contains
     !  Read flow field data from NetCDF file at specified time index               |
     !------------------------------------------------------------------------------|
 
+    ! Time step
+    ierr = nf90_inq_varid(fid,"time",varid)
+    call handle_ncerror(ierr)
+    ierr = nf90_get_var(fid,varid,tmp,[n],[1])
+    time = tmp(1)
+    call handle_ncerror(ierr)
+
     ! Free surface elevation
     ierr = nf90_inq_varid(fid,"zeta",varid)
     call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,el,[1,time],[NODES,1])
+    ierr = nf90_get_var(fid,varid,el,[1,n],[NODES,1])
     call handle_ncerror(ierr)
 
     ! Eastward warter velocity
     ierr = nf90_inq_varid(fid,"u",varid)
     call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,u,[1,1,time],[ELEMENTS,SIGLAY,1])
+    ierr = nf90_get_var(fid,varid,u,[1,1,n],[ELEMENTS,SIGLAY,1])
     call handle_ncerror(ierr)
 
     ! Northward water velocity
     ierr = nf90_inq_varid(fid,"v",varid)
     call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,v,[1,1,time],[ELEMENTS,SIGLAY,1])
+    ierr = nf90_get_var(fid,varid,v,[1,1,n],[ELEMENTS,SIGLAY,1])
     call handle_ncerror(ierr)
 
     ! Upward water velocity
     ierr = nf90_inq_varid(fid,"ww",varid)
     call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,w,[1,1,time],[ELEMENTS,SIGLAY,1])
+    ierr = nf90_get_var(fid,varid,w,[1,1,n],[ELEMENTS,SIGLAY,1])
     call handle_ncerror(ierr)
 
-    ! Close file
+    !------------------------------------------------------------------------------|
+    !  Close file                                                                  |
+    !------------------------------------------------------------------------------|
     ierr = nf90_close(fid)
     call handle_ncerror(ierr)
   end subroutine read_flow
+
+  !==============================================================================|
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+  !==============================================================================|
+
+  function timeIndex(time) result(n)
+    !==============================================================================|
+    !  Get the NetCDF record index corrosponding to the provided time              |
+    !                                                                              |
+    !  Note: Indecies start at 1, and the provided record will be the NetCDF       |
+    !  record at or immidiatly before the provided time.                           |
+    !==============================================================================|
+    implicit none
+    !------------------------------------------------------------------------------|
+    real, intent(in) :: time
+    integer          :: n
+    !------------------------------------------------------------------------------|
+    real, allocatable, dimension(:) :: field_times
+    character(len=NF90_MAX_NAME)    :: temp
+    integer                         :: sizet
+    integer                         :: ierr
+    integer                         :: fid, dimid, varid
+    integer                         :: i
+    !==============================================================================|
+
+    !------------------------------------------------------------------------------|
+    !  Open NetCDF data file                                                       |
+    !------------------------------------------------------------------------------|
+    ierr = nf90_open(trim(GRIDFN),NF90_NOWRITE,fid)
+    call handle_ncerror(ierr)
+
+    !------------------------------------------------------------------------------|
+    !  Get the time records                                                        |
+    !------------------------------------------------------------------------------|
+    ierr = nf90_inq_dimid(fid,"time",dimid)
+    call handle_ncerror(ierr)
+    ierr = nf90_inquire_dimension(fid,dimid,temp,sizet)
+    call handle_ncerror(ierr)
+    allocate(field_times(sizet))
+
+    ierr = nf90_inq_varid(fid,"time",varid)
+    call handle_ncerror(ierr)
+    ierr = nf90_get_var(fid,varid,field_times)
+    call handle_ncerror(ierr)
+
+    !------------------------------------------------------------------------------|
+    !  Close file                                                                  |
+    !------------------------------------------------------------------------------|
+    ierr = nf90_close(fid)
+    call handle_ncerror(ierr)
+
+    !------------------------------------------------------------------------------|
+    !  Find the NetCDF record that covers the provided time                        |
+    !------------------------------------------------------------------------------|
+    do i = 2,sizet
+      if (field_times(i) > time) then
+        n = i - 1
+        return
+      end if
+    end do
+
+    write(*,*) "ERROR: Could not find time ",time," in NetCDF flow-field file!"
+    stop
+  end function timeIndex
 
   !==============================================================================|
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|

@@ -36,7 +36,7 @@ program particle_traj
   !------------------------------------------------------------------------------|
   !  Read domain information from NetCDF input file                              |
   !------------------------------------------------------------------------------|
-  call ncd_read_grid
+  call init_flow_field
 
   write(*,*) "-- Domain Information --"
   write(*,*) "# Nodes               : ",NODES

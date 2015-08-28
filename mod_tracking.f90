@@ -11,19 +11,18 @@ module mod_tracking
   integer,  allocatable, dimension(:) :: LAG_ID       ! Unique particle identifier
   integer,  allocatable, dimension(:) :: LAG_HOST     ! Element containing particle
   logical,  allocatable, dimension(:) :: LAG_INDOMAIN ! Particle is in the domain
-  integer,  allocatable, dimension(:) :: LAG_RT       ! Release time for the particle (s)
-  integer,  allocatable, dimension(:) :: LAG_AGE      ! Age of the particle (s)
-  integer,  allocatable, dimension(:) :: LAG_TRACK    ! Lifetime of the particle (s)
+  integer,  allocatable, dimension(:) :: LAG_STOP     ! Simulation end time for the particle (s)
+  integer,  allocatable, dimension(:) :: LAG_START    ! Release time for the particle (s)
   real,     allocatable, dimension(:) :: LAG_D        ! Initial depth of the particle (m)
   real(DP), allocatable, dimension(:) :: LAG_XP       ! X position of particle (m)
   real(DP), allocatable, dimension(:) :: LAG_YP       ! Y position of particle (m)
   real(DP), allocatable, dimension(:) :: LAG_ZP       ! Z position of particle (sigma)
 
-  integer :: LAG_TIME ! Curent simulation time (s)
-  integer :: LAG_DUR  ! Duration of simulation (s)
+  integer :: NDRFT         ! Number of particles being tracked
 
-  integer :: ISLAG    ! Start record from NetCDF flow-field file
-  integer :: IELAG    ! End record from NetCDF flow-field file
+  integer :: SIM_TIME      ! Curent simulation time (s)
+  integer :: SIM_END       ! Simulation end time (s)
+  real    :: SIM_START_MJD ! Simulation real-time start date (mjd)
 contains
 
   subroutine init_tracking
@@ -36,48 +35,24 @@ contains
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
-    !  Initialize particle tracking arrays                                         |
-    !------------------------------------------------------------------------------|
-    allocate(LAG_ID(NDRFT),LAG_HOST(NDRFT))
-    allocate(LAG_INDOMAIN(NDRFT),LAG_RT(NDRFT),LAG_AGE(NDRFT),LAG_TRACK(NDRFT))
-    allocate(LAG_XP(NDRFT),LAG_YP(NDRFT))
-    allocate(LAG_ZP(NDRFT))
-    allocate(LAG_D(NDRFT))
-
-    LAG_HOST     = 0
-    LAG_AGE      = 0
-    LAG_INDOMAIN = .true.
-
-    !------------------------------------------------------------------------------|
-    !  Calculate particle tracking start iteration                                 |
-    !------------------------------------------------------------------------------|
-    ISLAG = int(DAYST*86400.0)/INSTP + 1
-
-    !------------------------------------------------------------------------------|
-    !  Read initial partical positions from seed file                              |
+    !  Read initial partical positions from the seed file                          |
     !------------------------------------------------------------------------------|
     call read_seed
 
     !------------------------------------------------------------------------------|
-    !  Calculate particle tracking end iteration                                   |
+    !  Find particle tracking simulated end time                                   |
     !------------------------------------------------------------------------------|
-    LAG_DUR = maxval(LAG_RT + LAG_TRACK)
-    IELAG   = LAG_DUR/INSTP + ISLAG
+    SIM_TIME = 0
+    SIM_END  = maxval(LAG_STOP)
 
     !------------------------------------------------------------------------------|
     !  Print statistics on lagrangian tracking to output                           |
     !------------------------------------------------------------------------------|
     write(*,*) "-- Lagrangian Tracking Informaion --"
-    write(*,*) "# Points               : ",NDRFT
-    write(*,*) "# Start itteration     : ",ISLAG
-    write(*,*) "# End itteration       : ",IELAG
-    write(*,*) "# Forcing time step    : ",INSTP
-    write(*,*) "# Internal time step   : ",DTI
-
-    !------------------------------------------------------------------------------|
-    !  Write initial particle positions to output file                             |
-    !------------------------------------------------------------------------------|
-    call write_track
+    write(*,*) "# Points to track      : ",NDRFT
+    write(*,*) "# Sim. start time      : ",SIM_START_MJD
+    write(*,*) "# Sim. duration        : ",SIM_END
+    write(*,*) "# Time step            : ",DTI
   end subroutine init_tracking
 
   !==============================================================================|
@@ -90,85 +65,66 @@ contains
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    real,     dimension(ELEMENTS,SIGLAY) :: u_start, u_end
-    real,     dimension(ELEMENTS,SIGLAY) :: v_start, v_end
-    real,     dimension(ELEMENTS,SIGLAY) :: w_start, w_end
-    real,     dimension(NODES)           :: el_start, el_end
     real(DP), dimension(ELEMENTS,SIGLAY) :: u, up
     real(DP), dimension(ELEMENTS,SIGLAY) :: v, vp
     real(DP), dimension(ELEMENTS,SIGLAY) :: w, wp
     real(DP), dimension(NODES)           :: el, elp
-    !------------------------------------------------------------------------------|
-    integer                   :: record
-    integer                   :: i1, i2, it
-    real                      :: tmp1, tmp2
-    logical, dimension(NDRFT) :: active
+    logical,  dimension(NDRFT)           :: active
+    real(DP), dimension(:), allocatable  :: h_part, el_part
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
     !  Get velocity field at the beginning of the simulation (time 0)              |
     !------------------------------------------------------------------------------|
-    call read_flow(u_start,v_start,w_start,el_start,ISLAG)
-    up = u_start
-    vp = v_start
-    wp = w_start
-    elp = el_start
+    call get_flow_at(up,vp,wp,elp,SIM_START_MJD)
+
+    !------------------------------------------------------------------------------|
+    !  Calculate the particle's initial sigma position                             |
+    !------------------------------------------------------------------------------|
+    allocate(h_part(NDRFT))
+    allocate(el_part(NDRFT))
+    call interp_elh(NDRFT,LAG_HOST,LAG_XP,LAG_YP,elp,h_part,el_part)
+    LAG_ZP = LAG_D/(h_part + el_part)
+    deallocate(h_part)
+    deallocate(el_part)
+
+    !------------------------------------------------------------------------------|
+    !  Write initial particle positions to output file                             |
+    !------------------------------------------------------------------------------|
+    call write_track(elp)
 
     !------------------------------------------------------------------------------|
     !  Loop over the tracking period                                               |
     !------------------------------------------------------------------------------|
     write(*,*) "== Running Tracking Simulation =="
-    LAG_TIME = 0
-    do record = (ISLAG+1),IELAG
+    do
+      if (SIM_TIME > SIM_END) exit
+      SIM_TIME = SIM_TIME + DTI
 
       !------------------------------------------------------------------------------|
-      !  Read velocity field from NetCDF file                                        |
+      !  Get the velocity field for the current time step                            |
       !------------------------------------------------------------------------------|
-      call read_flow(u_end,v_end,w_end,el_end,record)
-
-      !------------------------------------------------------------------------------|
-      !  Loop within one forcing interval                                            |
-      !------------------------------------------------------------------------------|
-      i1 = 1
-      i2 = INSTP/DTI
-      do it = i1,i2
-        LAG_TIME = LAG_TIME + DTI
-
-        tmp2 = float(it - i1 + 1)/float(i2 - i1 + 1)
-        tmp1 = float(it - i2)/float(i1 - 1 - i2)
-
-        u  = tmp1*u_start  + tmp2*u_end
-        v  = tmp1*v_start  + tmp2*v_end
-        w  = tmp1*w_start  + tmp2*w_end
-        el = tmp1*el_start + tmp2*el_end
-
-        !------------------------------------------------------------------------------|
-        !  Run the tracking simulation                                                 |
-        !------------------------------------------------------------------------------|
-        call traject(up,u,vp,v,wp,w,elp,el)
-
-        !------------------------------------------------------------------------------|
-        !  Write particle records to file                                              |
-        !------------------------------------------------------------------------------|
-        if (mod(LAG_TIME,DTOUT) == 0) call write_track
-
-        ! Time step update of velocity fields
-        up  = u
-        vp  = v
-        wp  = w
-        elp = el
-      end do
+      call get_flow_at(u,v,w,el,SIM_START_MJD + float(SIM_TIME)/86400.0)
 
       !------------------------------------------------------------------------------|
-      !  Hourly update of physical fields                                            |
+      !  Run the tracking simulation                                                 |
       !------------------------------------------------------------------------------|
-      u_start = u_end
-      v_start = v_end
-      w_start = w_end
-      el_start = el_end
+      call traject(up,u,vp,v,wp,w,elp,el)
 
-      write(*,*) "Finished: ",record,", sim time (s): ",LAG_TIME
+      !------------------------------------------------------------------------------|
+      !  Write particle records to file                                              |
+      !------------------------------------------------------------------------------|
+      if (mod(SIM_TIME,DTOUT) == 0) call write_track(el)
+
+      !------------------------------------------------------------------------------|
+      !  Time step update of velocity fields                                         |
+      !------------------------------------------------------------------------------|
+      up  = u
+      vp  = v
+      wp  = w
+      elp = el
     end do
+
     write(*,*) "== Finished Particle Tracking =="
   end subroutine run_tracking
 
@@ -188,24 +144,19 @@ contains
     !   X              | REAL | Domain co-ordinates (meters)                       |
     !   Y              | REAL | Domain co-ordinates (meters)                       |
     !   Z              | REAL | Particle depth (meters)                            |
-    !   Release Delay  | REAL | Delay until the particle is released (seconds)     |
-    !   Track Duration | REAL | Time to track the particle for (seconds)           |
+    !   Release Time   | REAL | Time to release particle into the simulation (mjd) |
+    !   Track End Time | REAL | Time to remove particle from the simulation (mjd)  |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    integer                              :: i
-    integer                              :: inlag
-    logical                              :: fexist
-    integer                              :: stat
-    real,     dimension(ELEMENTS,SIGLAY) :: u, v, w
-    real,     dimension(NODES)           :: el
-    real(DP), dimension(NDRFT)           :: hp, elp
-    real,     dimension(NDRFT)           :: rt_in, track_in
+    integer                         :: i
+    integer                         :: inlag
+    integer                         :: stat
+    logical                         :: fexist
+    character(len=80)               :: junk
+    real, allocatable, dimension(:) :: start_in, stop_in
     !==============================================================================|
 
-    !------------------------------------------------------------------------------|
-    ! Scan in the initial particle position file                                   |
-    !------------------------------------------------------------------------------|
     inquire(file=trim(STARTSEED),exist=fexist)
     if(.not.fexist) then
       write(*,*) "ERROR: Lagrangian particle initial position file: "
@@ -213,22 +164,49 @@ contains
       stop
     end if
 
+    !------------------------------------------------------------------------------|
+    !  Count the number of particles being tracked                                 |
+    !------------------------------------------------------------------------------|
+    NDRFT = 0
     open(unit=inlag,file=trim(STARTSEED),status='old')
+    do
+      read(inlag,*,iostat=stat) junk
+      if (stat /= 0) exit
+      if (len_trim(junk) > 1) NDRFT = NDRFT + 1
+    end do
+    rewind(inlag)
+
+    !------------------------------------------------------------------------------|
+    !  Initialize particle tracking arrays                                         |
+    !------------------------------------------------------------------------------|
+    allocate(LAG_ID(NDRFT),LAG_HOST(NDRFT))
+    allocate(LAG_INDOMAIN(NDRFT),LAG_START(NDRFT),LAG_STOP(NDRFT))
+    allocate(LAG_XP(NDRFT),LAG_YP(NDRFT))
+    allocate(LAG_ZP(NDRFT))
+    allocate(LAG_D(NDRFT))
+    allocate(start_in(NDRFT), stop_in(NDRFT))
+
+    LAG_HOST     = 0
+    LAG_INDOMAIN = .true.
+
+    !------------------------------------------------------------------------------|
+    !  Scan in the initial particle position file                                  |
+    !------------------------------------------------------------------------------|
     do i = 1,NDRFT
-      read(inlag,*,iostat=stat) LAG_ID(i),LAG_XP(i),LAG_YP(i),LAG_D(i),rt_in(i),track_in(i)
+      read(inlag,*,iostat=stat) LAG_ID(i),LAG_XP(i),LAG_YP(i),LAG_D(i),start_in(i),stop_in(i)
       if (stat /= 0) then
-        write(*,*) "ERROR: Lagrangian particle initial position file: ",trim(STARTSEED)
-        write(*,*) ,"does not contain ",NDRFT," records."
-      stop
+        write(*,*) "ERROR: Problem reading the initial position file: ",trim(STARTSEED)
+        stop
       end if
     end do
     close(inlag)
 
     !------------------------------------------------------------------------------|
-    !  Convert external hours to internal seconds                                  |
+    !  Convert external mjd to internal seconds                                    |
     !------------------------------------------------------------------------------|
-    LAG_RT = int(rt_in*3600.0)
-    LAG_TRACK = int(track_in*3600.0)
+    SIM_START_MJD = minval(start_in)
+    LAG_START = int((start_in - SIM_START_MJD)*86400.0)
+    LAG_STOP  = int((stop_in - SIM_START_MJD)*86400.0)
 
     !------------------------------------------------------------------------------|
     !  Locate the particle in the domain                                           |
@@ -236,21 +214,13 @@ contains
     do i = 1,NDRFT
       call fhe_robust(LAG_XP(i),LAG_YP(i),LAG_HOST(i),LAG_INDOMAIN(i))
     end do
-
-    !------------------------------------------------------------------------------|
-    !  Shift z co-ordinate to model domain (sigma depth)                           |
-    !------------------------------------------------------------------------------|
-    call read_flow(u,v,w,el,ISLAG)
-    call interp_elh(NDRFT,LAG_HOST,LAG_XP,LAG_YP,el,hp,elp)
-    LAG_ZP = LAG_D/(hp + elp)
-    if (P_REL_B) LAG_ZP = 1.0_dp - LAG_ZP
   end subroutine read_seed
 
   !==============================================================================|
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine write_track
+  subroutine write_track(el)
     !==============================================================================|
     !  Write particle track to output file                                         |
     !==============================================================================|
@@ -261,19 +231,19 @@ contains
     !   ID             | INT  | Arbitrary identifier                               |
     !   X              | REAL | Domain co-ordinates (meters)                       |
     !   Y              | REAL | Domain co-ordinates (meters)                       |
-    !   Z              | REAL | Domain co-ordinates (meters)                       |
+    !   Z              | REAL | Particle depth (meters)                            |
     !   TIME           | REAL | Time position was recorded (hours)                 |
     !   AGE            | REAL | Duration of particle track (hours)                 |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    integer                              :: i
-    integer                              :: outf
-    logical                              :: fexist
-    real,     dimension(ELEMENTS,SIGLAY) :: u, v, w
-    real,     dimension(NODES)           :: el
-    real(DP), dimension(NDRFT)           :: hp, elp
-    real(DP), dimension(NDRFT)           :: z_pos
+    real(DP), dimension(NODES), intent(in) :: el
+    !------------------------------------------------------------------------------|
+    integer                    :: i
+    integer                    :: outf
+    logical                    :: fexist
+    real(DP), dimension(NDRFT) :: hp, elp
+    real(DP), dimension(NDRFT) :: z_pos
     !==============================================================================|
 
     inquire(file=trim(OUTFN),exist=fexist)
@@ -289,8 +259,6 @@ contains
     z_pos = LAG_ZP
     if (P_REL_B) z_pos = 1.0_dp - z_pos
     if (.not.OUT_SIGMA) then
-      i = LAG_TIME/INSTP + ISLAG
-      call read_flow(u,v,w,el,i)
       call interp_elh(NDRFT,LAG_HOST,LAG_XP,LAG_YP,el,hp,elp)
       z_pos = z_pos*(hp + elp)
     end if
@@ -299,12 +267,12 @@ contains
     !  Append particle records to the output file                                  |
     !------------------------------------------------------------------------------|
     do i = 1,NDRFT
-      write(outf,100) LAG_ID(i),LAG_XP(i),LAG_YP(i),z_pos(i),LAG_TIME,LAG_AGE(i)
+      write(outf,100) LAG_ID(i),LAG_XP(i),LAG_YP(i),z_pos(i),(float(SIM_TIME)/86400.0 + SIM_START_MJD)
     end do
 
     close(outf)
     return
-100 format(i10,f14.2,f14.2,f9.2,i10,i10)
+100 format(i10,f14.2,f14.2,f9.2,f12.5)
   end subroutine write_track
 
 end module mod_tracking

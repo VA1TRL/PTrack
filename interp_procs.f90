@@ -41,7 +41,7 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   !------------------------------------------------------------------------------|
   nactive = 0
   do i = 1,NDRFT
-    if (LAG_INDOMAIN(i) .and. LAG_RT(i) <= LAG_TIME .and. LAG_AGE(i) < LAG_TRACK(i)) then
+    if (LAG_INDOMAIN(i) .and. LAG_START(i) <= SIM_TIME .and. LAG_STOP(i) > SIM_TIME) then
       nactive = nactive + 1
       ai(nactive) = i
     end if
@@ -180,7 +180,6 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
     LAG_ZP(ai(i))       = z(i)
     LAG_HOST(ai(i))     = host(i)
     LAG_INDOMAIN(ai(i)) = indomain(i)
-    LAG_AGE(ai(i))      = LAG_AGE(ai(i)) + DTI
   end do
 end subroutine traject
 
