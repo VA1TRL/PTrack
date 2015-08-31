@@ -10,7 +10,6 @@ module mod_config
   integer :: DTOUT   ! Time step for output records (seconds)
 
   logical :: F_DEPTH
-  logical :: P_SIGMA
   logical :: P_REL_B
   logical :: OUT_SIGMA
 
@@ -47,16 +46,6 @@ contains
     iscan = scan_file(CASENAME,"DTOUT",iscal = DTOUT)
     if(iscan /= 0) then
       write(*,*) "ERROR reading DTOUT from: ", CASENAME
-      i = PScanMsg(iscan)
-      stop 
-    end if
-
-    !------------------------------------------------------------------------------|
-    !  P_SIGMA : Run vertical simulation over sigma levels, instead of meters      |
-    !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"P_SIGMA",lval = P_SIGMA)
-    if(iscan /= 0) then
-      write(*,*) "ERROR reading P_SIGMA from: ", CASENAME
       i = PScanMsg(iscan)
       stop 
     end if

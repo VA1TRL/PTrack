@@ -7,11 +7,11 @@ module mod_tracking
   use mod_flow_field
   implicit none
   save
-  !==============================================================================|
-  integer,  allocatable, dimension(:) :: LAG_ID       ! Unique particle identifier
+  !------------------------------------------------------------------------------|
+  integer,  allocatable, dimension(:) :: LAG_ID       ! User-supplied particle identifier
   integer,  allocatable, dimension(:) :: LAG_HOST     ! Element containing particle
-  logical,  allocatable, dimension(:) :: LAG_INDOMAIN ! Particle is in the domain
-  integer,  allocatable, dimension(:) :: LAG_STOP     ! Simulation end time for the particle (s)
+  logical,  allocatable, dimension(:) :: LAG_INDOMAIN ! Particle is in the domain (Y/N)
+  integer,  allocatable, dimension(:) :: LAG_STOP     ! End time for the particle track (s)
   integer,  allocatable, dimension(:) :: LAG_START    ! Release time for the particle (s)
   real,     allocatable, dimension(:) :: LAG_D        ! Initial depth of the particle (m)
   real(DP), allocatable, dimension(:) :: LAG_XP       ! X position of particle (m)
@@ -21,8 +21,9 @@ module mod_tracking
   integer :: NDRFT         ! Number of particles being tracked
 
   integer :: SIM_TIME      ! Curent simulation time (s)
-  integer :: SIM_END       ! Simulation end time (s)
+  integer :: SIM_END       ! Durration of the simulation (s)
   real    :: SIM_START_MJD ! Simulation real-time start date (mjd)
+  !==============================================================================|
 contains
 
   subroutine init_tracking
@@ -31,7 +32,7 @@ contains
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    integer :: np_out, tdrift
+    real :: end_time_mjd
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
@@ -48,11 +49,12 @@ contains
     !------------------------------------------------------------------------------|
     !  Print statistics on lagrangian tracking to output                           |
     !------------------------------------------------------------------------------|
+    end_time_mjd = float(SIM_END)/86400.0 + SIM_START_MJD
     write(*,*) "-- Lagrangian Tracking Informaion --"
-    write(*,*) "# Points to track      : ",NDRFT
-    write(*,*) "# Sim. start time      : ",SIM_START_MJD
-    write(*,*) "# Sim. duration        : ",SIM_END
-    write(*,*) "# Time step            : ",DTI
+    write(*,*) "# Particles to track   : ",NDRFT
+    write(*,*) "# Sim. start time (mjd): ",SIM_START_MJD
+    write(*,*) "# Sim. end time (mjd)  : ",end_time_mjd
+    write(*,*) "# Time step (s)        : ",DTI
   end subroutine init_tracking
 
   !==============================================================================|
@@ -69,9 +71,9 @@ contains
     real(DP), dimension(ELEMENTS,SIGLAY) :: v, vp
     real(DP), dimension(ELEMENTS,SIGLAY) :: w, wp
     real(DP), dimension(NODES)           :: el, elp
-    logical,  dimension(NDRFT)           :: active
     real(DP), dimension(:), allocatable  :: h_part, el_part
     !==============================================================================|
+    write(*,*) "== Running Tracking Simulation =="
 
     !------------------------------------------------------------------------------|
     !  Get velocity field at the beginning of the simulation (time 0)              |
@@ -96,7 +98,6 @@ contains
     !------------------------------------------------------------------------------|
     !  Loop over the tracking period                                               |
     !------------------------------------------------------------------------------|
-    write(*,*) "== Running Tracking Simulation =="
     do
       if (SIM_TIME > SIM_END) exit
       SIM_TIME = SIM_TIME + DTI
@@ -157,6 +158,9 @@ contains
     real, allocatable, dimension(:) :: start_in, stop_in
     !==============================================================================|
 
+    !------------------------------------------------------------------------------|
+    !  Count the number of particles being tracked                                 |
+    !------------------------------------------------------------------------------|
     inquire(file=trim(STARTSEED),exist=fexist)
     if(.not.fexist) then
       write(*,*) "ERROR: Lagrangian particle initial position file: "
@@ -164,9 +168,6 @@ contains
       stop
     end if
 
-    !------------------------------------------------------------------------------|
-    !  Count the number of particles being tracked                                 |
-    !------------------------------------------------------------------------------|
     NDRFT = 0
     open(unit=inlag,file=trim(STARTSEED),status='old')
     do
@@ -232,8 +233,7 @@ contains
     !   X              | REAL | Domain co-ordinates (meters)                       |
     !   Y              | REAL | Domain co-ordinates (meters)                       |
     !   Z              | REAL | Particle depth (meters)                            |
-    !   TIME           | REAL | Time position was recorded (hours)                 |
-    !   AGE            | REAL | Duration of particle track (hours)                 |
+    !   TIME           | REAL | Time of particle record (mjd)                      |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
@@ -244,8 +244,12 @@ contains
     logical                    :: fexist
     real(DP), dimension(NDRFT) :: hp, elp
     real(DP), dimension(NDRFT) :: z_pos
+    real                       :: sim_time_mjd
     !==============================================================================|
 
+    !------------------------------------------------------------------------------|
+    !  Open the output file for writing                                            |
+    !------------------------------------------------------------------------------|
     inquire(file=trim(OUTFN),exist=fexist)
     if (fexist) then
       open(outf,file=trim(OUTFN),status="old",position="append")
@@ -256,23 +260,26 @@ contains
     !------------------------------------------------------------------------------|
     !  Shift z-coordinate to output domain                                         |
     !------------------------------------------------------------------------------|
-    z_pos = LAG_ZP
-    if (P_REL_B) z_pos = 1.0_dp - z_pos
-    if (.not.OUT_SIGMA) then
-      call interp_elh(NDRFT,LAG_HOST,LAG_XP,LAG_YP,el,hp,elp)
-      z_pos = z_pos*(hp + elp)
+    call interp_elh(NDRFT,LAG_HOST,LAG_XP,LAG_YP,el,hp,elp)
+    if (F_DEPTH) then
+      z_pos = 0.0_dp - LAG_D/(hp + elp)
+    else
+      z_pos = LAG_ZP
     end if
-    
+    if (P_REL_B) z_pos = -1.0_dp - z_pos
+    if (.not.OUT_SIGMA) z_pos = 0.0_dp - z_pos*(hp + elp)
+
     !------------------------------------------------------------------------------|
     !  Append particle records to the output file                                  |
     !------------------------------------------------------------------------------|
+    sim_time_mjd = float(SIM_TIME)/86400.0 + SIM_START_MJD
     do i = 1,NDRFT
-      write(outf,100) LAG_ID(i),LAG_XP(i),LAG_YP(i),z_pos(i),(float(SIM_TIME)/86400.0 + SIM_START_MJD)
+      write(outf,100) LAG_ID(i),LAG_XP(i),LAG_YP(i),z_pos(i),sim_time_mjd
     end do
 
     close(outf)
     return
-100 format(i10,f14.2,f14.2,f9.2,f12.5)
+100 format(i10,f14.2,f14.2,f9.2,f12.4)
   end subroutine write_track
 
 end module mod_tracking
