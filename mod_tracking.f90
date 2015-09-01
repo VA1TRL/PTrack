@@ -173,7 +173,7 @@ contains
     do
       read(inlag,*,iostat=stat) junk
       if (stat /= 0) exit
-      if (len_trim(junk) > 1) NDRFT = NDRFT + 1
+      if (len_trim(junk) > 0) NDRFT = NDRFT + 1
     end do
     rewind(inlag)
 
