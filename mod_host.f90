@@ -1,16 +1,16 @@
 subroutine fhe(x,y,host,indomain)
   !==============================================================================|
   !  Determine Which Element A Particle Resides in By Searching                  |
-  !  Neighboring Elements.  Updates host component of Lagrangian Particle        |  
+  !  Neighboring Elements.  Updates host component of Lagrangian Particle        |
   !  Type and update "found" flag to indicate whether the host                   |
-  !  Has been found		                                                 |
+  !  Has been found	                                                             |
   !==============================================================================|
   use mod_flow_field
   implicit none
   !------------------------------------------------------------------------------|
-  real(DP), intent(in)		:: x, y
-  integer,  intent(inout)	:: host
-  logical,  intent(out)		:: indomain
+  real(DP), intent(in)    :: x, y
+  integer,  intent(inout) :: host
+  logical,  intent(out)   :: indomain
   logical                 :: isintriangle
   !------------------------------------------------------------------------------|
   integer                 :: i, j, iney, ncheck
@@ -46,7 +46,7 @@ end subroutine fhe
 subroutine fhe_robust(x,y,host,indomain)
   !==============================================================================|
   !  Find Home Element For Points (X,Y)                                          |
-  !  Search Nearest Element to Progressively Further Elements. Updates Lagrangian|  
+  !  Search Nearest Element to Progressively Further Elements. Updates Lagrangian|
   !  component "host" and marks Lagrangian component "ifound" with 1 if          |
   !  found.  returns logical variable "all_found" if all lagrangian variables    |
   !  have a known host element.  The host element may have been found prior to   |
@@ -54,11 +54,11 @@ subroutine fhe_robust(x,y,host,indomain)
   !==============================================================================|
   use mod_flow_field
   implicit none
-  !------------------------------------------------------------------------------!
+  !------------------------------------------------------------------------------|
   real(DP), intent(in)    :: x, y
   integer,  intent(inout) :: host
   logical,  intent(inout) :: indomain
-  logical	                :: isintriangle
+  logical                 :: isintriangle
   !------------------------------------------------------------------------------|
   integer                      :: min_loc
   real,    dimension(ELEMENTS) :: radlist

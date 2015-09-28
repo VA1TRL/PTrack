@@ -22,13 +22,13 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   integer,  dimension(NDRFT)            :: ai
   real(DP), dimension(ELEMENTS,SIGLAY)  :: u, v, w
   real(DP), dimension(NODES)            :: el
-  real(DP), allocatable, dimension(:)   :: x0, y0, z0
-  real(DP), allocatable, dimension(:)   :: x, y, z
-  real(DP), allocatable, dimension(:)   :: hp, elp
-  real(DP), allocatable, dimension(:,:) :: vx, vy, vz
-  real,     allocatable, dimension(:)   :: depth
-  integer,  allocatable, dimension(:)   :: host
-  logical,  allocatable, dimension(:)   :: indomain
+  real(DP), dimension(:),   allocatable :: x0, y0, z0
+  real(DP), dimension(:),   allocatable :: x, y, z
+  real(DP), dimension(:),   allocatable :: hp, elp
+  real(DP), dimension(:,:), allocatable :: vx, vy, vz
+  real,     dimension(:),   allocatable :: depth
+  integer,  dimension(:),   allocatable :: host
+  logical,  dimension(:),   allocatable :: indomain
   !------------------------------------------------------------------------------|
   integer, parameter                    :: mstage = 4
   real,    parameter, dimension(mstage) :: a_rk = [0.0, 0.5, 0.5, 1.0]
@@ -48,12 +48,12 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   end do
 
   !------------------------------------------------------------------------------|
-  !  Initalize working memory                                                    |
+  !  Allocate working memory                                                     |
   !------------------------------------------------------------------------------|
-  allocate(x0(nactive),y0(nactive),z0(nactive))
-  allocate(x(nactive),y(nactive),z(nactive))
-  allocate(hp(nactive),elp(nactive))
-  allocate(host(nactive),indomain(nactive))
+  allocate(x0(nactive), y0(nactive), z0(nactive))
+  allocate(x(nactive), y(nactive), z(nactive))
+  allocate(hp(nactive), elp(nactive))
+  allocate(host(nactive), indomain(nactive))
   allocate(vx(0:mstage,nactive))
   allocate(vy(0:mstage,nactive))
   allocate(vz(0:mstage,nactive))
@@ -67,10 +67,10 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   vz(0,:) = 0.0_dp
 
   do i = 1,nactive
-    x0(i)    = LAG_XP(ai(i))
-    y0(i)    = LAG_YP(ai(i))
-    z0(i)    = LAG_ZP(ai(i))
-    host(i)  = LAG_HOST(ai(i))
+    x0(i)   = LAG_XP(ai(i))
+    y0(i)   = LAG_YP(ai(i))
+    z0(i)   = LAG_ZP(ai(i))
+    host(i) = LAG_HOST(ai(i))
     if (F_DEPTH) depth(i) = LAG_D(ai(i))
   end do
   indomain = .true.
@@ -169,6 +169,113 @@ end subroutine traject
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
 !==============================================================================|
 
+subroutine rand_walk(ell)
+  !==============================================================================|
+  !  Apply the random walk algoritham to the currently active particles          |
+  !==============================================================================|
+  use mod_config
+  use mod_tracking
+  implicit none
+  !------------------------------------------------------------------------------|
+  real(DP), dimension(NODES), intent(in) :: ell
+  !------------------------------------------------------------------------------|
+  integer                               :: i, nactive
+  integer,  dimension(NDRFT)            :: ai
+  real(DP), dimension(:),   allocatable :: x, y, z
+  real(DP), dimension(:),   allocatable :: dzm
+  real(DP), dimension(:),   allocatable :: depth
+  integer,  dimension(:),   allocatable :: host
+  logical,  dimension(:),   allocatable :: indomain
+  real(DP), dimension(:),   allocatable :: hp, elp
+  real,     dimension(:,:), allocatable :: rnd
+  !==============================================================================|
+
+  !------------------------------------------------------------------------------|
+  !  Check if the random walk model should be used or skipped                    |
+  !------------------------------------------------------------------------------|
+  if (.not.P_RND_WALK) return
+
+  !------------------------------------------------------------------------------|
+  !  Select active particles                                                     |
+  !------------------------------------------------------------------------------|
+  nactive = 0
+  do i = 1,NDRFT
+    if (LAG_INDOMAIN(i) .and. LAG_START(i) <= SIM_TIME .and. LAG_STOP(i) > SIM_TIME) then
+      nactive = nactive + 1
+      ai(nactive) = i
+    end if
+  end do
+
+  !------------------------------------------------------------------------------|
+  !  Allocate working memory                                                     |
+  !------------------------------------------------------------------------------|
+  allocate(x(nactive), y(nactive), z(nactive))
+  allocate(dzm(nactive))
+  allocate(host(nactive), indomain(nactive))
+  allocate(hp(nactive), elp(nactive))
+  allocate(rnd(3,nactive))
+  if (F_DEPTH) allocate(depth(nactive))
+
+  !------------------------------------------------------------------------------|
+  !  Initalize working memory                                                    |
+  !------------------------------------------------------------------------------|
+  do i = 1,nactive
+    x(i)   = LAG_XP(ai(i))
+    y(i)   = LAG_YP(ai(i))
+    z(i)   = LAG_ZP(ai(i))
+    host(i) = LAG_HOST(ai(i))
+    if (F_DEPTH) depth(i) = LAG_D(ai(i))
+  end do
+  indomain = .true.
+
+  if (F_DEPTH) then
+    call interp_elh(nactive,host,x,y,ell,hp,elp)
+    z = 0.0_dp - depth/(hp + elp)
+  end if
+
+  !------------------------------------------------------------------------------|
+  !  Add a random varriance to the particle positions                            |
+  !------------------------------------------------------------------------------|
+  call random_number(rnd)
+  rnd = rnd - 0.5
+  x = x + rnd(1,:)*((float(DTI)*2*K_XY*12)**0.5)
+  y = y + rnd(2,:)*((float(DTI)*2*K_XY*12)**0.5)
+  dzm =   rnd(3,:)*((float(DTI)*2*K_Z*12)**0.5)
+
+  do i = 1,nactive
+    call fhe(x(i),y(i),host(i),indomain(i))
+  end do
+
+  !------------------------------------------------------------------------------|
+  !  Convert the particle's new z position to sigma depth                        |
+  !------------------------------------------------------------------------------|
+  call interp_elh(nactive,host,x,y,ell,hp,elp)
+  if (F_DEPTH) then
+    z = 0.0_dp - depth/(hp + elp)
+  else
+    z = z + dzm/(hp + elp)
+  end if
+
+  if (F_DEPTH) where (z < -1.0) indomain = .false.
+  where (z < -1.0) z = -2.0_dp - z ! Reflect off bottom
+  where (z > 0.0) z = 0.0_dp ! Can't move above water surface
+
+  !------------------------------------------------------------------------------|
+  !  Update particle tracking data arrays                                        |
+  !------------------------------------------------------------------------------|
+  do i = 1,nactive
+    LAG_XP(ai(i))       = x(i)
+    LAG_YP(ai(i))       = y(i)
+    LAG_ZP(ai(i))       = z(i)
+    LAG_HOST(ai(i))     = host(i)
+    LAG_INDOMAIN(ai(i)) = indomain(i)
+  end do
+end subroutine rand_walk
+
+!==============================================================================|
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+!==============================================================================|
+
 subroutine interp_v(np,host,x,y,z,uin,vin,win,u,v,w) 
   !==============================================================================|
   !  Give a point (x,y,z), obtain a linear interpolation                         |
@@ -190,9 +297,9 @@ subroutine interp_v(np,host,x,y,z,uin,vin,win,u,v,w)
   real(DP)                    :: x0c, y0c
   real(DP)                    :: dudx, dudy, dvdx, dvdy, dwdx, dwdy
   real(DP)                    :: ue01, ue02, ve01, ve02, we01, we02
-  real(DP)                    :: zf1,zf2
+  real(DP)                    :: zf1, zf2
   real(DP), dimension(SIGLAY) :: dzp
-  integer	                    :: npp, i, j, k
+  integer                     :: npp, i, j, k
   !==============================================================================|
 
   u = 0.0_dp
