@@ -14,8 +14,8 @@ module mod_config
   logical :: OUT_SIGMA
   logical :: P_RND_WALK
 
-  real :: K_XY
-  real :: K_Z
+  real    :: K_XY
+  real    :: K_Z
 
   character(len=80) :: CASENAME   ! Name of curent run configuration file
   character(len=80) :: OUTFN      ! Name of output data file
@@ -30,97 +30,96 @@ contains
     use mod_inp
     implicit none
     !------------------------------------------------------------------------------|
-    integer            :: iscan
-    integer            :: i
+    integer :: iscan
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
     !  DTI : Internal simulation time step (seconds)                               |
     !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"DTI",iscal = DTI)
+    iscan = scan_file(CASENAME, "DTI", iscal = DTI)
     if (iscan /= 0) then
       write(*,*) "ERROR reading DTI from: ", CASENAME
-      i = PScanMsg(iscan)
+      call pscanmsg(iscan)
       stop 
     end if
 
     !------------------------------------------------------------------------------|
     !  DTOUT : Output interval (seconds)                                           |
     !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"DTOUT",iscal = DTOUT)
+    iscan = scan_file(CASENAME, "DTOUT", iscal = DTOUT)
     if (iscan /= 0) then
       write(*,*) "ERROR reading DTOUT from: ", CASENAME
-      i = PScanMsg(iscan)
+      call pscanmsg(iscan)
       stop 
     end if
 
     !------------------------------------------------------------------------------|
     !  F_DEPTH : Run simulation holding particle depth constant                    |
     !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"F_DEPTH",lval = F_DEPTH)
+    iscan = scan_file(CASENAME, "F_DEPTH", lval = F_DEPTH)
     if (iscan /= 0) then
       write(*,*) "ERROR reading F_DEPTH from: ", CASENAME
-      i = PScanMsg(iscan)
+      call pscanmsg(iscan)
       stop 
     end if
 
     !------------------------------------------------------------------------------|
     !  P_REL_B : Particle positions relitive to the bottom (instead of surface)    |
     !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"P_REL_B",lval = P_REL_B)
+    iscan = scan_file(CASENAME, "P_REL_B", lval = P_REL_B)
     if (iscan /= 0) then
       write(*,*) "ERROR reading P_REL_B from: ", CASENAME
-      i = PScanMsg(iscan)
+      call pscanmsg(iscan)
       stop 
     end if
 
     !------------------------------------------------------------------------------|
     !  OUT_SIGMA : Output particle z position as sigma depth isnstead of meters    |
     !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"OUT_SIGMA",lval = OUT_SIGMA)
+    iscan = scan_file(CASENAME, "OUT_SIGMA", lval = OUT_SIGMA)
     if (iscan /= 0) then
       write(*,*) "ERROR reading OUT_SIGMA from: ", CASENAME
-      i = PScanMsg(iscan)
+      call pscanmsg(iscan)
       stop 
     end if
 
     !------------------------------------------------------------------------------|
     !  P_RND_WALK : Apply a random walk behaviour to the active particles          |
     !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"P_RND_WALK",lval = P_RND_WALK)
+    iscan = scan_file(CASENAME, "P_RND_WALK", lval = P_RND_WALK)
     if (iscan /= 0) then
       write(*,*) "ERROR reading P_RND_WALK from: ", CASENAME
-      i = PScanMsg(iscan)
+      call pscanmsg(iscan)
       stop 
     end if
 
     !------------------------------------------------------------------------------|
     !  GRIDFN : NetCDF input filename, containing grid and flow field data         |     
     !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"GRIDFN",cval = GRIDFN)
+    iscan = scan_file(CASENAME, "GRIDFN", cval = GRIDFN)
     if (iscan /= 0) then
       write(*,*) "ERROR reading GRIDFN from: ", CASENAME
-      i = PScanMsg(iscan)
+      call pscanmsg(iscan)
       stop 
     end if
 
     !------------------------------------------------------------------------------|
     !  OUTFN : Output file name                                                    |
     !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"OUTFN",cval = OUTFN)
+    iscan = scan_file(CASENAME, "OUTFN", cval = OUTFN)
     if (iscan /= 0) then
       write(*,*) "ERROR reading OUTFN from: ", CASENAME
-      i = PScanMsg(iscan)
+      call pscanmsg(iscan)
       stop 
     end if
 
     !------------------------------------------------------------------------------|
     !  STARTSEED : Partical location input filename                                |
     !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME,"STARTSEED",cval = STARTSEED)
+    iscan = scan_file(CASENAME, "STARTSEED", cval = STARTSEED)
     if (iscan /= 0) then
       write(*,*) "ERROR reading STARTSEED from: ", CASENAME
-      i = PScanMsg(iscan)
+      call pscanmsg(iscan)
       stop 
     end if
 
@@ -128,20 +127,20 @@ contains
       !------------------------------------------------------------------------------|
       !  K_XY : Horizontal particle diffusivity                                      |
       !------------------------------------------------------------------------------|
-      iscan = scan_file(CASENAME,"K_XY",fscal = K_XY)
+      iscan = scan_file(CASENAME, "K_XY", fscal = K_XY)
       if (iscan /= 0) then
         write(*,*) "ERROR reading K_XY: ", CASENAME
-        i = PScanMsg(iscan)
+        call pscanmsg(iscan)
         stop 
       end if
 
       !------------------------------------------------------------------------------|
       !  K_Z : Vertical particle diffusivity                                         |
       !------------------------------------------------------------------------------|
-      iscan = scan_file(CASENAME,"K_Z",fscal = K_Z)
+      iscan = scan_file(CASENAME, "K_Z", fscal = K_Z)
       if (iscan /= 0) then
         write(*,*) "ERROR reading K_Z from: ", CASENAME
-        i = PScanMsg(iscan)
+        call pscanmsg(iscan)
         stop 
       end if
     end if

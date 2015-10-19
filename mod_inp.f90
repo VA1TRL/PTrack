@@ -1,415 +1,376 @@
-MODULE MOD_INP
+module mod_inp
+  use mod_prec
+contains
 
-CONTAINS
-
-  !==============================================================================!
-  !  DECOMPOSE INPUT LINE INTO VARIABLE NAME AND VARIABLE VALUE(S)               !
-  !==============================================================================!
-
-  SUBROUTINE GET_VAL(LNUM,NUMCHAR,TEXT_LINE,VARNAME,VARTYPE,LOGVAL,STRINGVAL,&
-       REALVAL,INTVAL,NVAL)
-
-    !==============================================================================!
-    USE MOD_PREC
-    IMPLICIT NONE
-    INTEGER, INTENT(IN) :: LNUM,NUMCHAR
-    CHARACTER(LEN=NUMCHAR) :: TEXT_LINE
-    CHARACTER(LEN=20), INTENT(OUT) :: VARNAME
-    CHARACTER(LEN=7), INTENT(OUT) :: VARTYPE
-    LOGICAL, INTENT(OUT) :: LOGVAL
-    CHARACTER(LEN=80), INTENT(OUT) :: STRINGVAL(150)
-    REAL, INTENT(INOUT) :: REALVAL(150)
-    INTEGER, INTENT(INOUT) :: INTVAL(150)
-    INTEGER, INTENT(OUT) :: NVAL
-    !------------------------------------------------------------------------------!
-    CHARACTER(LEN=NUMCHAR) :: VARVAL,TEMP,FRAG(200)
-    CHARACTER(LEN=80) :: TSTRING
-    CHARACTER(LEN=6) :: ERRSTRING
-    CHARACTER(LEN=16) :: NUMCHARS 
-    INTEGER LENGTH,EQLOC,LVARVAL,DOTLOC
-    INTEGER I,LOCEX,NP
-    LOGICAL ONFRAG
-
-    !==============================================================================!
-    FRAG = " "
-    NUMCHARS = "0123456789+-Ee. " 
-    VARTYPE = "error"
-    LOGVAL = .FALSE.
-    LENGTH = LEN_TRIM(TEXT_LINE) 
-    WRITE(ERRSTRING,"(I6)") LNUM
-    LOCEX = INDEX(TEXT_LINE,"!")
-
-    !
-    !-----------------------CHECK FOR BLANK LINE OR COMMENT------------------------!
-    !
-    IF(LENGTH == 0 .OR. LOCEX==1)THEN
-       VARTYPE = "no data"
-       VARNAME = "no data"
-       RETURN
-    END IF
-
-    !
-    !-----------------------CHANGE COMMAS TO BLANKS--------------------------------!
-    !
-    DO I=1,LENGTH
-       IF(TEXT_LINE(I:I) == ",") TEXT_LINE(I:I) = " "
-    END DO
-    !
-    !-----------------------REMOVING TRAILING COMMENTS-----------------------------!
-    !
-    IF(LOCEX /= 0)THEN
-       TEMP = TEXT_LINE(1:LOCEX-1)
-       TEXT_LINE = TEMP
-    END IF
-    !
-    !--------------------ENSURE "=" EXISTS AND DETERMINE LOCATION------------------!
-    !
-    EQLOC = INDEX(TEXT_LINE,"=")
-    !   IF(EQLOC == 0) CALL PERROR(6,'DATA LINE '//ERRSTRING//' MUST CONTAIN "=" ')
-
-    !
-    !--------------------SPLIT OFF VARNAME AND VARVAL STRINGS----------------------!
-    !
-    VARNAME = TEXT_LINE(1:EQLOC-1)
-!    print *, VARNAME
-    VARVAL  = ADJUSTL(TEXT_LINE(EQLOC+1:LENGTH))
-!    print *, '&',trim(VARVAL),'&'
-    LVARVAL = LEN_TRIM(VARVAL)
-!    print *, LVARVAL
-    !   IF(LVARVAL == 0) CALL PERROR(6,'IN DATA PARAMETER FILE', &
-    !                'VARIABLE LINE'//ERRSTRING//' HAS NO ASSOCIATED VALUE')
-    !
-    !-----------------DETERMINE TYPE OF VARVAL-------------------------------------!
-    !
-
-    !
-    !  CHECK FOR LOGICAL
-    !
-    IF((VARVAL(1:1) == "T" .OR. VARVAL(1:1) == "F") .AND. LVARVAL == 1)THEN 
-       VARTYPE = "logical"
-       IF(VARVAL(1:1) == "T") LOGVAL = .TRUE.
-       RETURN
-    END IF
-
-    !
-    !  CHECK IF IT IS A STRING  (CONTAINS CHARACTERS OTHER THAN 0-9,+,-,e,E,.)
-    !
-    DO I=1,LVARVAL
-       IF(INDEX(NUMCHARS,VARVAL(I:I)) == 0) VARTYPE = "string" 
-    END DO
-!    print *, VARTYPE
-    !
-    !  PROCESS STRING (MAY BE MULTIPLE)
-    !
-    IF(VARTYPE == "string") THEN
-       TSTRING = VARVAL
-       STRINGVAL(1) = TSTRING 
-       NVAL = 1
-       ONFRAG = .TRUE.
-       DO I=1,LVARVAL
-          IF(VARVAL(I:I) /= " ")THEN
-             FRAG(NVAL) = TRIM(FRAG(NVAL))//VARVAL(I:I)
-             ONFRAG = .TRUE.
-          ELSE
-             IF(ONFRAG) NVAL = NVAL + 1
-             ONFRAG = .FALSE.
-          END IF
-       END DO
-       DO I=1,NVAL
-          STRINGVAL(I+1) = TRIM(FRAG(I))
-       END DO
-       RETURN
-    END IF
-
-    !
-    !  CHECK IF IT IS A FLOAT
-    !
-
-    DOTLOC = INDEX(VARVAL,".")
-    IF(DOTLOC /= 0) THEN
-       VARTYPE = "float"
-    ELSE
-       VARTYPE = "integer"
-    END IF
-!    print *, VARTYPE
-    !
-    !-----------------FRAGMENT INTO STRINGS FOR MULTIPLE VALUES---------------------!
-    !
-    NP = 1
-    ONFRAG = .TRUE.
-    DO I=1,LVARVAL
-       IF(VARVAL(I:I) /= " ")THEN 
-          FRAG(NP) = TRIM(FRAG(NP))//VARVAL(I:I)
-          ONFRAG = .TRUE.
-       ELSE
-          IF(ONFRAG) NP = NP + 1
-          ONFRAG = .FALSE.
-       END IF
-    END DO
-    !
-    !-----------------EXTRACT NUMBER(S) FROM CHARACTER STRINGS----------------------!
-    !
-!    print *, ONFRAG, trim(FRAG(1))
-    NVAL = NP
-!    print *, NP, FRAG
-    DO I=1,NP
-       TEMP = TRIM(FRAG(I))
-!	   print *,'$', trim(TEMP),'$'
-       IF(VARTYPE == "float") THEN 
-          READ(TEMP,*)REALVAL(I)
-          !print *, REALVAL
-       ELSE
-          READ(TEMP,*)INTVAL(I)
-!	      print *,intval(i)
-       END IF
-    END DO
-!  print *, REALVAL
-  END SUBROUTINE GET_VAL
-
-
-  !==============================================================================|
-
-  FUNCTION SCAN_FILE(FNAME,VNAME,ISCAL,FSCAL,IVEC,FVEC,CVEC,NSZE,CVAL,LVAL)           
-
+  subroutine get_val(lnum, numchar, text_line, varname, vartype, logval, stringval, realval, intval, nval)
     !==============================================================================|
-    !   Scan an Input File for a Variable                                          |
-    !   RETURN VALUE:                                                              |
-    !        0 = FILE FOUND, VARIABLE VALUE FOUND                                  |
-    !       -1 = FILE DOES NOT EXIST OR PERMISSIONS ARE INCORRECT                  |
-    !       -2 = VARIABLE NOT FOUND OR IMPROPERLY SET                              |
-    !       -3 = VARIABLE IS OF DIFFERENT TYPE, CHECK INPUT FILE                   |
-    !       -4 = VECTOR PROVIDED BUT DATA IS SCALAR TYPE                           |
-    !       -5 = NO DATATYPE DESIRED, EXITING                                      |
-    !							                                                   |
-    !   REQUIRED INPUT:		        				                               |
-    !        FNAME = File Name					                                   |
-    !        FSIZE = Length of Filename					                           |
-    !                                                                              | 
-    !   OPTIONAL (MUST PROVIDE ONE)        					                       | 
-    !        ISCAL = INTEGER SCALAR					                               |
-    !        FSCAL = FLOAT SCALAR  						                           | 
-    !        CVAL = CHARACTER VARIABLE                                             |
-    !        LVAL = LOGICAL VARIABLE                                               |
-    !        IVEC = INTEGER VECTOR **                                              |
-    !        FVEC = FLOAT VECTOR **                                                |
-    !        CVEC = STRING VECTOR ** (STRINGS OF LENGTH 80)                        |
-    !      **NSZE = ARRAY SIZE (MUST BE PROVIDED WITH IVEC/FVEC)                   |
-    !                                                                              | 
+    !  Decompose input line into variable name and variable value(s)               |
     !==============================================================================|
-
-    USE MOD_PREC
-    IMPLICIT NONE
-    CHARACTER(LEN=*) :: FNAME,VNAME
-    INTEGER, INTENT(INOUT), OPTIONAL :: ISCAL,IVEC(*)
-    REAL, INTENT(INOUT), OPTIONAL    :: FSCAL,FVEC(*)
-    CHARACTER(LEN=80), OPTIONAL      :: CVAL,CVEC(*)
-    LOGICAL, INTENT(INOUT), OPTIONAL :: LVAL
-    INTEGER, INTENT(out), OPTIONAL :: NSZE 
+    implicit none
+    !------------------------------------------------------------------------------|
+    integer,                intent(in)    :: lnum, numchar
+    character(len=numchar)                :: text_line
+    character(len=20),      intent(out)   :: varname
+    character(len=7),       intent(out)   :: vartype
+    logical,                intent(out)   :: logval
+    character(len=80),      intent(out)   :: stringval(150)
+    real,                   intent(inout) :: realval(150)
+    integer,                intent(inout) :: intval(150)
+    integer,                intent(out)   :: nval
+    !------------------------------------------------------------------------------|
+    character(len=numchar) :: varval, temp, frag(200)
+    character(len=80)      :: tstring
+    character(len=6)       :: errstring
+    character(len=16)      :: numchars 
+    integer                :: length, eqloc, lvarval, dotloc
+    integer                :: i, locex, np
+    logical                :: onfrag
+    !==============================================================================|
+    frag     = " "
+    numchars = "0123456789+-Ee. " 
+    vartype  = "error"
+    logval   = .false.
+    length   = len_trim(text_line) 
+    write(errstring, "(i6)") lnum
+    locex = index(text_line, "!")
 
     !------------------------------------------------------------------------------|
+    !  check for blank line of comment                                             |
+    !------------------------------------------------------------------------------|
+    if (length == 0 .or. locex == 1) then
+      vartype = "no data"
+      varname = "no data"
+      return
+    end if
 
-    INTEGER :: SCAN_FILE
-    REAL REALVAL(150)
-    INTEGER  INTVAL(150)
-    CHARACTER(LEN=20 ) :: VARNAME
-    CHARACTER(LEN=80 ) :: STRINGVAL(150)
-    CHARACTER(LEN=100 ) :: INPLINE
-    CHARACTER(LEN=2400) :: TLINE
-    CHARACTER(LEN=7  ) :: VARTYPE
-    INTEGER I,NVAL,NSET,NLINE,NREP
-    LOGICAL CHECK,LOGVAL
+    !------------------------------------------------------------------------------|
+    !  Change commas to blanks                                                     |
+    !------------------------------------------------------------------------------|
+    do i = 1,length
+      if (text_line(i:i) == ",") text_line(i:i) = " "
+    end do
 
+    !------------------------------------------------------------------------------|
+    !  Removing trailing comments                                                  |
+    !------------------------------------------------------------------------------|
+    if (locex /= 0) then
+      temp = text_line(1:locex - 1)
+      text_line = temp
+    end if
 
-    SCAN_FILE = 0
+    !------------------------------------------------------------------------------|
+    !  Ensure "=" exists and determine location                                    |
+    !------------------------------------------------------------------------------|
+    eqloc = index(text_line, "=")
+
+    !------------------------------------------------------------------------------|
+    !  Split off varname and varval strings                                        |
+    !------------------------------------------------------------------------------|
+    varname = text_line(1:eqloc - 1)
+    varval  = adjustl(text_line(eqloc + 1:length))
+    lvarval = len_trim(varval)
+
+    !------------------------------------------------------------------------------|
+    !  Determine type of varval                                                    |
+    !------------------------------------------------------------------------------|
+
+    ! check for logical
+    if ((varval(1:1) == "T" .or. varval(1:1) == "F") .and. lvarval == 1) then
+      vartype = "logical"
+      if (varval(1:1) == "T") logval = .true.
+      return
+    end if
+
+    ! check if it is a string (contains characters other than 0-9,+,-,e,E,.)
+    do i = 1,lvarval
+      if (index(numchars,varval(i:i)) == 0) vartype = "string" 
+    end do
+
+    ! Process string (may be multiple)
+    if (vartype == "string") then
+      tstring      = varval
+      stringval(1) = tstring 
+      nval         = 1
+      onfrag       = .true.
+      do i = 1,lvarval
+        if (varval(i:i) /= " ") then
+          frag(nval) = trim(frag(nval))//varval(i:i)
+          onfrag = .true.
+        else
+          if (onfrag) nval = nval + 1
+          onfrag = .false.
+        end if
+      end do
+      do i = 1,nval
+        stringval(i + 1) = trim(frag(i))
+      end do
+      return
+    end if
+
+    ! check if it is a float
+    dotloc = index(varval, ".")
+    if (dotloc /= 0) then
+      vartype = "float"
+    else
+      vartype = "integer"
+    end if
+
+    !------------------------------------------------------------------------------|
+    !  Fragment into strings for multiple values                                   |
+    !------------------------------------------------------------------------------|
+    np     = 1
+    onfrag = .true.
+    do i = 1,lvarval
+      if(varval(i:i) /= " ")then 
+        frag(np) = trim(frag(np))//varval(i:i)
+        onfrag   = .true.
+      else
+        if(onfrag) np = np + 1
+        onfrag = .false.
+      end if
+    end do
+
+    !------------------------------------------------------------------------------|
+    !  Extract number(s) from character strings                                    |
+    !------------------------------------------------------------------------------|
+    nval = np
+    do i = 1,np
+      temp = trim(frag(i))
+      if (vartype == "float") then 
+        read(temp,*) realval(i)
+      else
+        read(temp,*) intval(i)
+      end if
+    end do
+  end subroutine get_val
+
+  !==============================================================================|
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+  !==============================================================================|
+
+  function scan_file(fname, vname, iscal, fscal, ivec, fvec, cvec, nsze, cval, lval)
     !==============================================================================|
-    !            OPEN THE INPUT FILE                                               |
+    !  Scan an input file for a variable                                           |
+    !  Return value:                                                               |
+    !       0 = File found, variable value found                                   |
+    !      -1 = File does not exist or permissions are incorrect                   |
+    !      -2 = Variable not found or improperly set                               |
+    !      -3 = Variable is of different type, check input file                    |
+    !      -4 = Vector provided bur data is scalar type                            |
+    !      -5 = No datatype desired, exiting                                       |
+    !                                                                              |
+    !  Required input:                                                             |
+    !      fname = file Name                                                       |
+    !                                                                              |
+    !  Optional (must provide one)                                                 |
+    !      iscal = integer scalar                                                  |
+    !      fscal = Float scalar                                                    |
+    !      cval  = Character variable                                              |
+    !      lval  = Logical variable                                                |
+    !      ivec  = integer vector **                                               |
+    !      fvec  = Float vector **                                                 |
+    !      cvec  = String vector ** (strings of length 80)                         |
+    !      nsze  = Array size ** (must be provided with ivec/fvec)                 |
     !==============================================================================|
-    INQUIRE(FILE=TRIM(FNAME),EXIST=CHECK)
-    IF(.NOT.CHECK)THEN
-       SCAN_FILE = -1
-       RETURN
-    END IF
-
-    OPEN(10,FILE=TRIM(FNAME)) ; REWIND(10) 
-
+    implicit none
+    !------------------------------------------------------------------------------|
+    character(len=*),  intent(in)              :: fname, vname
+    integer,           intent(inout), optional :: iscal, ivec(*)
+    real,              intent(inout), optional :: fscal, fvec(*)
+    character(len=80), intent(inout), optional :: cval, cvec(*)
+    logical,           intent(inout), optional :: lval
+    integer,           intent(out),   optional :: nsze
+    !------------------------------------------------------------------------------|
+    integer             :: scan_file
+    real                :: realval(150)
+    integer             :: intval(150)
+    character(len=20)   :: varname
+    character(len=80)   :: stringval(150)
+    character(len=100)  :: inpline
+    character(len=2400) :: tline
+    character(len=7)    :: vartype
+    integer             :: i, nval, nset, nline, nrep
+    logical             :: check, logval
     !==============================================================================|
-    !            SCAN THE FILE FOR THE VARIABLE NAME                               |
-    !==============================================================================|
 
-    NSET = 0
-    NLINE = 0
-    DO WHILE(.TRUE.)
-       TLINE(1:LEN(TLINE)) = ' ' 
-       NREP  = 0
-       NLINE = NLINE + 1
-       READ(10,'(a)',END=20) INPLINE
-!       print *, INPLINE
-       TLINE(1:80) = INPLINE(1:80)
+    !------------------------------------------------------------------------------|
+    !  Open the input file                                                         |
+    !------------------------------------------------------------------------------|
+    scan_file = 0
+    inquire(file = trim(fname), exist = check)
+    if (.not.check) then
+      scan_file = -1
+      return
+    end if
 
-       !----PROCESS LINE CONTINUATIONS------------------------------------------------!
-110    CONTINUE
-       I = LEN_TRIM(INPLINE)
-     
-       IF(I /= 0)THEN
+    open(10, file = trim(fname))
+    rewind(10)
 
+    !------------------------------------------------------------------------------|
+    !  Scan the file for the variable name                                         |
+    !------------------------------------------------------------------------------|
+    nset  = 0
+    nline = 0
+    do while(.true.)
+      tline(1:len(tline)) = ' '
+      nrep  = 0
+      nline = nline + 1
+      read(10, '(a)', end = 20) inpline
+      tline(1:80) = inpline(1:80)
 
-             IF( INPLINE(I-1:I) == '\\')THEN
+      !------------------------------------------------------------------------------|
+      !  Process line continuations                                                  |
+      !------------------------------------------------------------------------------|
+110   continue
+      i = len_trim(inpline)
 
-                NREP = NREP + 1
-                READ(10,'(a)',END=20) INPLINE
-!		print *, '%',trim(INPLINE),'%'
-                NLINE = NLINE + 1
-                TLINE( NREP*80 + 1 : NREP*80 +80) = INPLINE(1:80)
-!		print *, '%',trim(tline),'%'
-                 GOTO 110
-             END IF
-          END IF
-          !     IF(NREP > 4)CALL PERROR(6,"CANNOT HAVE > 4 LINE CONTINUATIONS")
+      if (i /= 0) then
+        if (inpline(i - 1:i) == '\\') then
+          nrep = nrep + 1
+          read(10, '(a)', end = 20) inpline
+          nline = nline + 1
+          tline(nrep*80 + 1:nrep*80 + 80) = inpline(1:80)
+          goto 110
+        end if
+      end if
 
-          !----REMOVE LINE CONTINUATION CHARACTER \\-------------------------------------!
-          IF(NREP > 0)THEN
-             DO I=2,LEN_TRIM(TLINE)
+      !------------------------------------------------------------------------------|
+      !  Remove line continuation character                                          |
+      !------------------------------------------------------------------------------|
+      if (nrep > 0) then
+        do i = 2,len_trim(tline)
+          if (tline(i - 1:i) == '\\') tline(i - 1:i) = '  '
+        end do
+      end if
 
+      !------------------------------------------------------------------------------|
+      !  Process the line                                                            |
+      !------------------------------------------------------------------------------|
+      call get_val(nline, len_trim(tline), adjustl(tline), varname, vartype, logval, stringval, realval, intval, nval)
 
-
-                IF( TLINE(I-1:I) == '\\') TLINE(I-1:I) = '  '
-
-             END DO
-          END IF
-!          print *, LEN_TRIM(TLINE)
-          !----PROCESS THE LINE----------------------------------------------------------!
-          CALL GET_VAL(NLINE,LEN_TRIM(TLINE),ADJUSTL(TLINE),VARNAME,VARTYPE,LOGVAL,&
-               STRINGVAL,REALVAL,INTVAL,NVAL)
-
-!          print *, I
-          !----IF VARNAME MATCHES, PROCESS VARIABLE AND ERROR-CHECK----------------------!
-
-          IF(TRIM(to_upper(VARNAME)) == TRIM(to_upper(VNAME)))THEN
-
-             IF(PRESENT(ISCAL))THEN
-                IF(VARTYPE == 'integer')THEN
-                   ISCAL = INTVAL(1)
-                   CLOSE(10)
-                   RETURN
-                ELSE
-                   SCAN_FILE = -3
-                END IF
-             ELSE IF(PRESENT(FSCAL))THEN
-                IF(VARTYPE == 'float')THEN
-                   FSCAL = REALVAL(1)
-                   CLOSE(10)
-                   RETURN
-                ELSE
-                   SCAN_FILE = -3
-                END IF
-             ELSE IF(PRESENT(CVAL))THEN
-                IF(VARTYPE == 'string')THEN
-                   CVAL = STRINGVAL(1)
-                   CLOSE(10)
-                   RETURN
-                ELSE
-                   SCAN_FILE = -3
-                END IF
-             ELSE IF(PRESENT(LVAL))THEN
-                IF(VARTYPE == 'logical')THEN
-                   LVAL = LOGVAL
-                   CLOSE(10)
-                   RETURN
-                ELSE
-                   SCAN_FILE = -3
-                END IF
-             ELSE IF(PRESENT(IVEC))THEN
-                IF(NVAL > 1)THEN
-                   IF(VARTYPE == 'integer')THEN
-                      IVEC(1:NVAL) = INTVAL(1:NVAL)
-                      NSZE = NVAL
-                      CLOSE(10)
-                      RETURN
-                   ELSE
-                      SCAN_FILE = -3
-                   END IF
-                ELSE
-                   SCAN_FILE = -4 
-                END IF
-             ELSE IF(PRESENT(FVEC))THEN
-                IF(NVAL > 1)THEN
-                   IF(VARTYPE == 'float')THEN
-                      FVEC(1:NVAL) = REALVAL(1:NVAL)
-                      NSZE = NVAL
-                      CLOSE(10)
-                      RETURN
-                   ELSE
-                      SCAN_FILE = -3
-                   END IF
-                ELSE
-                   SCAN_FILE = -4 
-                END IF
-             ELSE IF(PRESENT(CVEC))THEN
-                IF(NVAL > 0)THEN
-                   IF(VARTYPE == 'string')THEN
-                      CVEC(1:NVAL) = STRINGVAL(2:NVAL+1)
-                      NSZE = NVAL
-                      CLOSE(10)
-                      RETURN
-                   ELSE
-                      SCAN_FILE = -3
-                   END IF
-                ELSE
-                   SCAN_FILE = -4
-                END IF
-             ELSE
-                SCAN_FILE = -5
-             END IF
-          END IF  !!VARIABLE IS CORRECT
-
-       END DO !!LOOP OVER INPUT FILE
-20     CLOSE(10) 
-       SCAN_FILE = -2
-       RETURN 
-     END FUNCTION SCAN_FILE
-
-
-
-function to_upper(strIn) result(strOut)
-! Adapted from http://www.star.le.ac.uk/~cgp/fortran.html (25 May 2012)
-
-     implicit none
-
-     character(len=*), intent(in) :: strIn
-     character(len=len(strIn)) :: strOut
-     integer :: i,j
-
-     do i = 1, len(strIn)
-          j = iachar(strIn(i:i))
-          if (j>= iachar("a") .and. j<=iachar("z") ) then
-               strOut(i:i) = achar(iachar(strIn(i:i))-32)
+      !------------------------------------------------------------------------------|
+      !  If varname matches, process variable and error-check                        |
+      !------------------------------------------------------------------------------|
+      if (trim(to_upper(varname)) == trim(to_upper(vname))) then
+        if (present(iscal)) then
+          if (vartype == 'integer') then
+            iscal = intval(1)
+            close(10)
+            return
           else
-               strOut(i:i) = strIn(i:i)
+            scan_file = -3
           end if
-     end do
+        else if (present(fscal)) then
+          if (vartype == 'float') then
+            fscal = realval(1)
+            close(10)
+            return
+          else
+            scan_file = -3
+          end if
+        else if (present(cval)) then
+          if (vartype == 'string') then
+            cval = stringval(1)
+            close(10)
+            return
+          else
+            scan_file = -3
+          end if
+        else if (present(lval)) then
+          if (vartype == 'logical') then
+            lval = logval
+            close(10)
+            return
+          else
+            scan_file = -3
+          end if
+        else if (present(ivec)) then
+          if (nval > 1) then
+            if (vartype == 'integer') then
+              ivec(1:nval) = intval(1:nval)
+              nsze = nval
+              close(10)
+              return
+            else
+              scan_file = -3
+            end if
+          else
+            scan_file = -4 
+          end if
+        else if (present(fvec)) then
+          if (nval > 1) then
+            if (vartype == 'float') then
+              fvec(1:nval) = realval(1:nval)
+              nsze = nval
+              close(10)
+              return
+            else
+              scan_file = -3
+            end if
+          else
+            scan_file = -4 
+          end if
+        else if (present(cvec)) then
+          if (nval > 0) then
+            if (vartype == 'string') then
+              cvec(1:nval) = stringval(2:nval+1)
+              nsze = nval
+              close(10)
+              return
+            else
+              scan_file = -3
+            end if
+          else
+            scan_file = -4
+          end if
+        else
+          scan_file = -5
+        end if
+      end if
 
-end function to_upper
+    end do
+20  close(10) 
+    scan_file = -2
+    return 
+  end function scan_file
 
-function PScanMsg(msgn)
-	!		print scan error message to stdout
-    !       -1 = FILE DOES NOT EXIST OR PERMISSIONS ARE INCORRECT                  |
-    !       -2 = VARIABLE NOT FOUND OR IMPROPERLY SET                              |
-    !       -3 = VARIABLE IS OF DIFFERENT TYPE, CHECK INPUT FILE                   |
-    !       -4 = VECTOR PROVIDED BUT DATA IS SCALAR TYPE                           |
-    !       -5 = NO DATATYPE DESIRED, EXITING                                      |
+  !==============================================================================|
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+  !==============================================================================|
 
-	implicit none
-	integer PScanMsg
-	integer, intent(in) :: msgn
-	character*50 msg(5)
-	data msg(1)/'FILE DOES NOT EXIST OR PERMISSIONS ARE INCORRECT'/
-	data msg(2)/'VARIABLE NOT FOUND OR IMPROPERLY SET'/
-	data msg(3)/'VARIABLE IS OF DIFFERENT TYPE, CHECK INPUT FILE'/
-	data msg(4)/'VECTOR PROVIDED BUT DATA IS SCALAR TYPE'/
-	data msg(5)/'NO DATATYPE DESIRED, EXITING'/
-	print *,msg(-msgn)
-	PScanMsg=1
-end function PScanMsg
+  function to_upper(strin) result(strout)
+    implicit none
+    character(len=*), intent(in) :: strin
+    character(len=len(strin))    :: strout
+    integer                      :: i, j
 
-     !==============================================================================|
-   END MODULE MOD_INP
+    do i = 1, len(strin)
+      j = iachar(strin(i:i))
+      if (j >= iachar("a") .and. j <= iachar("z")) then
+        strout(i:i) = achar(iachar(strin(i:i)) - 32)
+      else
+        strout(i:i) = strin(i:i)
+      end if
+    end do
+  end function to_upper
+
+  !==============================================================================|
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+  !==============================================================================|
+
+  subroutine pscanmsg(msgn)
+    implicit none
+    integer, intent(in) :: msgn
+    character(len=50)   :: msg(5)
+
+    data msg(1) /'File does not exist or permissions are incorrect'/
+    data msg(2) /'Variable not found or improperly set'/
+    data msg(3) /'Variable is of different type, check input file'/
+    data msg(4) /'Vector provided bur data is scalar type'/
+    data msg(5) /'No datatype desired, exiting'/
+
+    print *, msg(-msgn)
+  end subroutine pscanmsg
+
+end module mod_inp
+
