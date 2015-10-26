@@ -1,4 +1,4 @@
-# Lagrangian particle tracking off-line program
+# Off-Line Lagrangian Particle Tracking
 
 ## About
 
@@ -21,32 +21,34 @@ Where *$>* represents the command prompt and *run.dat* is the model configuratio
 
 ### Configuration file
 
-DTI       : Internal simulation time step (seconds)
-NDRFT     : Number of particles in tracking simulation
-INSTP     : NetCDF input file time step (seconds)
-DTOUT     : Output interval (seconds)
-DAYST     : Delay before particle tracking begins (relative to beginning of NetCDF file)
-P_SIGMA   : Run vertical simulation over sigma levels, instead of meters
-F_DEPTH   : Run simulation holding particle depth constant
-P_REL_B   : Particle positions relative to the bottom (instead of surface)
-OUT_SIGMA : Output particle z position as sigma depth instead of meters
-GRIDFN    : NetCDF input file name, containing grid and flow field data
-OUTFN     : Output file name
-STARTSEED : Particle location input filename
+PARAMETER | DESCRIPTION
+--------- | -----------------------------------------------
+DTI       | Internal simulation time step (seconds)
+NDRFT     | Number of particles in tracking simulation
+INSTP     | NetCDF input file time step (seconds)
+DTOUT     | Output interval (seconds)
+DAYST     | Delay before particle tracking begins (relative to beginning of NetCDF file)
+P_SIGMA   | Run vertical simulation over sigma levels, instead of meters
+F_DEPTH   | Run simulation holding particle depth constant
+P_REL_B   | Particle positions relative to the bottom (instead of surface)
+OUT_SIGMA | Output particle z position as sigma depth instead of meters
+GRIDFN    | NetCDF input file name, containing grid and flow field data
+OUTFN     | Output file name
+STARTSEED | Particle location input filename
 
 
 ### Particle seed file
 
 (By column, each row defines a different particle)
 
- PARAMETER      | TYPE | DESCRIPTION
+ COLUMN         | TYPE | DESCRIPTION
 --------------- | ---- | ----------------------------------
  ID             | INT  | Arbitrary identifier
- X              | REAL | Domain coordinates (meters)
- Y              | REAL | Domain coordinates (meters)
+ X              | REAL | Domain co-ordinates (meters)
+ Y              | REAL | Domain co-ordinates (meters)
  Z              | REAL | Particle depth (meters)
- Release Delay  | REAL | Delay until the particle is released (hours)
- Track Duration | REAL | Time to track the particle for (hours)
+ Release Time   | REAL | Time to release particle into the simulation (mjd)
+ Track End Time | REAL | Time to remove particle from the simulation (mjd)
 
 
 ### Output
@@ -56,9 +58,8 @@ STARTSEED : Particle location input filename
  PARAMETER      | TYPE | DESCRIPTION
 --------------- | ---- | ----------------------------------
  ID             | INT  | Arbitrary identifier
- X              | REAL | Domain coordinates (meters)
- Y              | REAL | Domain coordinates (meters)
+ X              | REAL | Domain co-ordinates (meters)
+ Y              | REAL | Domain co-ordinates (meters)
  Z              | REAL | Particle depth (meters)
- TIME           | REAL | Record time (seconds)
- AGE            | REAL | Time since release (seconds)
+ TIME           | REAL | Time of particle record (mjd)
 
