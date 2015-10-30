@@ -50,11 +50,15 @@ contains
     !------------------------------------------------------------------------------|
     SIM_TIME = 0
     SIM_END  = maxval(LAG_STOP)
+    end_time_mjd = float(SIM_END)/86400.0 + SIM_START_MJD
+    if (.not.check_field_time(SIM_START_MJD, end_time_mjd)) then
+      write(*,*) "ERROR: Provided times for the particle tracks are not covered by the NetCDF flow-field!"
+      stop
+    end if
 
     !------------------------------------------------------------------------------|
     !  Print statistics on lagrangian tracking to output                           |
     !------------------------------------------------------------------------------|
-    end_time_mjd = float(SIM_END)/86400.0 + SIM_START_MJD
     write(*,*) "-- Lagrangian Tracking Informaion --"
     write(*,*) "# Particles to track   : ",NDRFT
     write(*,*) "# Sim. start time (mjd): ",SIM_START_MJD

@@ -423,16 +423,76 @@ contains
     !------------------------------------------------------------------------------|
     !  Find the NetCDF record that covers the provided time                        |
     !------------------------------------------------------------------------------|
-    do i = 2,sizet
-      if (field_times(i) > time) then
-        n = i - 1
-        return
-      end if
-    end do
+    if (field_times(1) <= time) then
+      do i = 2,sizet
+        if (field_times(i) > time) then
+          n = i - 1
+          return
+        end if
+      end do
+    end if
 
     write(*,*) "ERROR: Could not find time ",time," in NetCDF flow-field file!"
     stop
   end function timeIndex
+
+  !==============================================================================|
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+  !==============================================================================|
+
+  function check_field_time(time_start, time_end) result(isVallid)
+    !==============================================================================|
+    !  Check if the provided timeline is covered by the NetCDF dataset             |
+    !==============================================================================|
+    implicit none
+    !------------------------------------------------------------------------------|
+    real, intent(in) :: time_start, time_end
+    logical          :: isVallid
+    !------------------------------------------------------------------------------|
+    real, allocatable, dimension(:) :: field_times
+    character(len=NF90_MAX_NAME)    :: temp
+    integer                         :: sizet
+    integer                         :: ierr
+    integer                         :: fid, dimid, varid
+    integer                         :: i
+    !==============================================================================|
+
+    !------------------------------------------------------------------------------|
+    !  Open NetCDF data file                                                       |
+    !------------------------------------------------------------------------------|
+    ierr = nf90_open(trim(GRIDFN),NF90_NOWRITE,fid)
+    call handle_ncerror(ierr)
+
+    !------------------------------------------------------------------------------|
+    !  Get the time records                                                        |
+    !------------------------------------------------------------------------------|
+    ierr = nf90_inq_dimid(fid,"time",dimid)
+    call handle_ncerror(ierr)
+    ierr = nf90_inquire_dimension(fid,dimid,temp,sizet)
+    call handle_ncerror(ierr)
+    allocate(field_times(sizet))
+
+    ierr = nf90_inq_varid(fid,"time",varid)
+    call handle_ncerror(ierr)
+    ierr = nf90_get_var(fid,varid,field_times)
+    call handle_ncerror(ierr)
+
+    !------------------------------------------------------------------------------|
+    !  Close file                                                                  |
+    !------------------------------------------------------------------------------|
+    ierr = nf90_close(fid)
+    call handle_ncerror(ierr)
+
+    !------------------------------------------------------------------------------|
+    !  Perform the check                                                           |
+    !------------------------------------------------------------------------------|
+    if (field_times(1) > time_start .or. field_times(sizet) <= time_end) then
+      isVallid = .false.
+      return 
+    end if
+    isVallid = .true.
+    return
+  end function check_field_time
 
   !==============================================================================|
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
