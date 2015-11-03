@@ -43,7 +43,7 @@ contains
     !------------------------------------------------------------------------------|
     !  Read initial partical positions from the seed file                          |
     !------------------------------------------------------------------------------|
-    call read_seed
+    call read_seed()
 
     !------------------------------------------------------------------------------|
     !  Find particle tracking simulated end time                                   |
@@ -120,7 +120,7 @@ contains
       !  Run the tracking simulation                                                 |
       !------------------------------------------------------------------------------|
       call traject(up,u,vp,v,wp,w,elp,el)
-      call rand_walk(el)
+      if (P_RND_WALK) call random_walk(el)
 
       !------------------------------------------------------------------------------|
       !  Write particle records to file                                              |

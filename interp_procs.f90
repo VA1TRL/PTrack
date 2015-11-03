@@ -169,11 +169,10 @@ end subroutine traject
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
 !==============================================================================|
 
-subroutine rand_walk(ell)
+subroutine random_walk(ell)
   !==============================================================================|
   !  Apply the random walk algoritham to the currently active particles          |
   !==============================================================================|
-  use mod_config
   use mod_tracking
   implicit none
   !------------------------------------------------------------------------------|
@@ -188,12 +187,8 @@ subroutine rand_walk(ell)
   logical,  dimension(:),   allocatable :: indomain
   real(DP), dimension(:),   allocatable :: hp, elp
   real,     dimension(:,:), allocatable :: rnd
+  real,     dimension(:),   allocatable :: rnd_vect
   !==============================================================================|
-
-  !------------------------------------------------------------------------------|
-  !  Check if the random walk model should be used or skipped                    |
-  !------------------------------------------------------------------------------|
-  if (.not.P_RND_WALK) return
 
   !------------------------------------------------------------------------------|
   !  Select active particles                                                     |
@@ -213,7 +208,8 @@ subroutine rand_walk(ell)
   allocate(dzm(nactive))
   allocate(host(nactive), indomain(nactive))
   allocate(hp(nactive), elp(nactive))
-  allocate(rnd(3,nactive))
+  allocate(rnd(nactive,3))
+  allocate(rnd_vect(nactive*3))
   if (F_DEPTH) allocate(depth(nactive))
 
   !------------------------------------------------------------------------------|
@@ -236,11 +232,12 @@ subroutine rand_walk(ell)
   !------------------------------------------------------------------------------|
   !  Add a random varriance to the particle positions                            |
   !------------------------------------------------------------------------------|
-  call random_number(rnd)
-  rnd = rnd - 0.5
-  x = x + rnd(1,:)*((float(DTI)*2*K_XY*12)**0.5)
-  y = y + rnd(2,:)*((float(DTI)*2*K_XY*12)**0.5)
-  dzm =   rnd(3,:)*((float(DTI)*2*K_Z*12)**0.5)
+  rnd_vect = reshape(rnd, [size(rnd)])
+  call gauss_random(size(rnd_vect), rnd_vect)
+  rnd = reshape(rnd_vect, [size(rnd, 1), size(rnd, 2)])
+  x = x + rnd(:,1)*((float(DTI)*2*K_XY)**0.5)
+  y = y + rnd(:,2)*((float(DTI)*2*K_XY)**0.5)
+  dzm =   rnd(:,3)*((float(DTI)*2*K_Z)**0.5)
 
   do i = 1,nactive
     call fhe(x(i),y(i),host(i),indomain(i))
@@ -270,7 +267,7 @@ subroutine rand_walk(ell)
     LAG_HOST(ai(i))     = host(i)
     LAG_INDOMAIN(ai(i)) = indomain(i)
   end do
-end subroutine rand_walk
+end subroutine random_walk
 
 !==============================================================================|
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
@@ -433,4 +430,45 @@ subroutine interp_elh(np,host,x,y,el,hp,elp)
   ey = AWY(host,1)*el(n1) + AWY(host,2)*el(n2) + AWY(host,3)*el(n3)
   elp = e0 + ex*x0c + ey*y0c
 end subroutine interp_elh
+
+!==============================================================================|
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+!==============================================================================|
+
+subroutine gauss_random(n, rnd)
+  !==============================================================================|
+  !  Returns an array of random numbers, conforming to a standard gaussian       |
+  !  normal distribution. That is, a normal distribution with zero mean and      |
+  !  unit varriance: N(0,1)                                                      |
+  !------------------------------------------------------------------------------|
+  !  The provided random numbers are generated using George Marsaglia's KISS     |
+  !  (Keep It Simple Stupid) pseudo random number generator, implemented by      |
+  !  random_number(). The uniformly distributed numbers provided are then fit    |
+  !  to a normal distribution via the Marsaglia polar method of the Box-Muller   |
+  !  transform.                                                                  |
+  !==============================================================================|
+  implicit none
+  !------------------------------------------------------------------------------|
+  integer,            intent(in)  :: n
+  real, dimension(n), intent(out) :: rnd
+  !------------------------------------------------------------------------------|
+  integer :: i
+  real    :: s, x, y, temp
+  !==============================================================================|
+
+  do i = 1,n,2
+    do
+      call random_number(x)
+      call random_number(y)
+      x = (x - 0.5)*2
+      y = (y - 0.5)*2
+      s = x**2 + y**2
+      if (s < 1) exit
+    end do
+
+    temp = sqrt(-2.0*log(s)/s)
+    rnd(i) = x*temp
+    if (i < n) rnd(i + 1) = y*temp
+  end do
+end subroutine gauss_random
 
