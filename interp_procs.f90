@@ -54,17 +54,17 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   allocate(x(nactive), y(nactive), z(nactive))
   allocate(hp(nactive), elp(nactive))
   allocate(host(nactive), indomain(nactive))
-  allocate(vx(0:mstage,nactive))
-  allocate(vy(0:mstage,nactive))
-  allocate(vz(0:mstage,nactive))
+  allocate(vx(nactive,0:mstage))
+  allocate(vy(nactive,0:mstage))
+  allocate(vz(nactive,0:mstage))
   if (F_DEPTH) allocate(depth(nactive))
 
   !------------------------------------------------------------------------------|
   !  Initialize stage variables                                                  |
   !------------------------------------------------------------------------------|
-  vx(0,:) = 0.0_dp
-  vy(0,:) = 0.0_dp
-  vz(0,:) = 0.0_dp
+  vx(:,0) = 0.0_dp
+  vy(:,0) = 0.0_dp
+  vz(:,0) = 0.0_dp
 
   do i = 1,nactive
     x0(i)   = LAG_XP(ai(i))
@@ -76,7 +76,7 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   indomain = .true.
 
   if (F_DEPTH) then
-    call interp_elh(nactive,host,x0,y0,el1,hp,elp)
+    call interp_elh(nactive, host, x0, y0, el1, hp, elp)
     z0 = 0.0_dp - depth/(hp + elp)
   end if
 
@@ -88,11 +88,11 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
     !------------------------------------------------------------------------------|
     !  Particle position at stage N                                                |
     !------------------------------------------------------------------------------|
-    x = x0 + a_rk(ns)*float(DTI)*vx(ns - 1,:)
-    y = y0 + a_rk(ns)*float(DTI)*vy(ns - 1,:)
-    z = a_rk(ns)*float(DTI)*vz(ns - 1,:) ! Displacement in meters
+    x = x0 + a_rk(ns)*float(DTI)*vx(:,ns - 1)
+    y = y0 + a_rk(ns)*float(DTI)*vy(:,ns - 1)
+    z =      a_rk(ns)*float(DTI)*vz(:,ns - 1) ! Displacement in meters
     do i = 1,nactive
-      call fhe(x(i),y(i),host(i),indomain(i))
+      call fhe(x(i), y(i), host(i), indomain(i))
     end do
 
     !------------------------------------------------------------------------------|
@@ -106,21 +106,21 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
     !------------------------------------------------------------------------------|
     !  We need the particle's sigma position to determine the stage N velocity     |
     !------------------------------------------------------------------------------|
-    call interp_elh(nactive,host,x,y,el,hp,elp)
+    call interp_elh(nactive, host, x, y, el, hp, elp)
     if (F_DEPTH) then
       z = 0.0_dp - depth/(hp + elp)
     else
       z = z0 + z/(hp + elp)
     end if
 
-    if (F_DEPTH) where (z < -1.0) indomain = .false.
+    if (F_DEPTH) where (z < -1.0_dp) indomain = .false.
     where (z < -1.0) z = -2.0_dp - z ! Reflect off bottom
     where (z > 0.0) z = 0.0_dp ! Can't move above water surface
 
     !------------------------------------------------------------------------------|
     !  Evaluate velocity (u,v,w) at stage ns particle position                     |
     !------------------------------------------------------------------------------|
-    call interp_v(nactive,host,x,y,z,u,v,w,vx(ns,:),vy(ns,:),vz(ns,:))
+    call interp_v(nactive, host, x, y, z, u, v, w, vx(:,ns),vy(:,ns),vz(:,ns))
   end do
 
   !------------------------------------------------------------------------------|
@@ -130,19 +130,19 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   y = y0
   z = 0.0_dp
   do ns = 1,mstage
-    x = x + float(DTI)*vx(ns,:)*b_rk(ns)
-    y = y + float(DTI)*vy(ns,:)*b_rk(ns)
-    z = z + float(DTI)*vz(ns,:)*b_rk(ns)
+    x = x + float(DTI)*vx(:,ns)*b_rk(ns)
+    y = y + float(DTI)*vy(:,ns)*b_rk(ns)
+    z = z + float(DTI)*vz(:,ns)*b_rk(ns)
   end do
 
   do i = 1,nactive
-    call fhe(x(i),y(i),host(i),indomain(i))
+    call fhe(x(i), y(i), host(i), indomain(i))
   end do
 
   !------------------------------------------------------------------------------|
   !  Convert the particle's new z position to sigma depth                        |
   !------------------------------------------------------------------------------|
-  call interp_elh(nactive,host,x,y,el2,hp,elp)
+  call interp_elh(nactive, host, x, y, el2, hp, elp)
   if (F_DEPTH) then
     z = 0.0_dp - depth/(hp + elp)
   else
