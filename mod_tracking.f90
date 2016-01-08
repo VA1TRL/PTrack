@@ -95,7 +95,7 @@ contains
     allocate(h_part(NDRFT))
     allocate(el_part(NDRFT))
     call interp_elh(NDRFT,LAG_HOST,LAG_XP,LAG_YP,elp,h_part,el_part)
-    LAG_ZP = LAG_D/(h_part + el_part)
+    LAG_ZP = 0.0_dp - LAG_D/(h_part + el_part)
     deallocate(h_part)
     deallocate(el_part)
 
