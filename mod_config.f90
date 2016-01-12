@@ -20,7 +20,7 @@ module mod_config
   character(len=80) :: CASENAME   ! Name of curent run configuration file
   character(len=80) :: OUTFN      ! Name of output data file
   character(len=80) :: GRIDFN     ! Name of NetCDF flow-field/grid input file
-  character(len=80) :: STARTSEED  ! Name of particle seed (initial location) file
+  character(len=80) :: SEEDFN     ! Name of particle seed (initial location) file
 contains
 
   subroutine init_model
@@ -114,11 +114,11 @@ contains
     end if
 
     !------------------------------------------------------------------------------|
-    !  STARTSEED : Partical location input filename                                |
+    !  SEEDFN : Partical location input filename                                   |
     !------------------------------------------------------------------------------|
-    iscan = scan_file(CASENAME, "STARTSEED", cval = STARTSEED)
+    iscan = scan_file(CASENAME, "SEEDFN", cval = SEEDFN)
     if (iscan /= 0) then
-      write(*,*) "ERROR reading STARTSEED from: ", CASENAME
+      write(*,*) "ERROR reading SEEDFN from: ", CASENAME
       call pscanmsg(iscan)
       stop 
     end if

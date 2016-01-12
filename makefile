@@ -36,7 +36,7 @@ FFLAGS = $(DEBFLGS) $(OPT)
 #  Filter Source Code
 #--------------------------------------------------------------------------
 
-MODS	= mod_prec.f90 mod_inp.f90 mod_config.f90 mod_flow_field.f90 mod_tracking.f90 mod_host.f90
+MODS	= mod_prec.f90 mod_inp.f90 mod_config.f90 mod_io.f90 mod_flow_field.f90 mod_tracking.f90 mod_host.f90
 MAIN	= interp_procs.f90 PTrack.f90
 SRCS	= $(MODS) $(MAIN)
 OBJS	= $(SRCS:.f90=.o)

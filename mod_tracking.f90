@@ -5,6 +5,7 @@ module mod_tracking
   use mod_prec
   use mod_config
   use mod_flow_field
+  use mod_io
   implicit none
   save
   !------------------------------------------------------------------------------|
@@ -147,45 +148,27 @@ contains
     !==============================================================================|
     !  Read the initial partical positions from the input file                     |
     !==============================================================================|
-    !  file format (By column, each row defines a diffrent particle)               |
-    !                                                                              |
-    !   PARAMETER      | TYPE | DESCRIPTION                                        |
+    !   VARIABLE       | TYPE | DESCRIPTION                                        |
     !  ----------------|------|--------------------------------                    |
-    !   ID             | INT  | Arbitrary identifier                               |
-    !   X              | REAL | Domain co-ordinates (meters)                       |
-    !   Y              | REAL | Domain co-ordinates (meters)                       |
-    !   Z              | REAL | Particle depth (meters)                            |
-    !   Release Time   | REAL | Time to release particle into the simulation (mjd) |
-    !   Track End Time | REAL | Time to remove particle from the simulation (mjd)  |
+    !   number         | INT  | Arbitrary identifier                               |
+    !   x              | REAL | Domain co-ordinates (meters)                       |
+    !   y              | REAL | Domain co-ordinates (meters)                       |
+    !   z              | REAL | Particle depth (meters)                            |
+    !   release        | REAL | Time to release particle into the simulation (mjd) |
+    !   end            | REAL | Time to remove particle from the simulation (mjd)  |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
+    integer                         :: fileid
     integer                         :: i
-    integer                         :: inlag
-    integer                         :: stat
-    logical                         :: fexist
-    character(len=80)               :: junk
-    real, allocatable, dimension(:) :: start_in, stop_in
+    real, allocatable, dimension(:) :: start_in, stop_in, xp, yp
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
-    !  Count the number of particles being tracked                                 |
+    !  Retrive the number of particles in the tracking simulation                  |
     !------------------------------------------------------------------------------|
-    inquire(file=trim(STARTSEED),exist=fexist)
-    if(.not.fexist) then
-      write(*,*) "ERROR: Lagrangian particle initial position file: "
-      write(*,*) trim(STARTSEED)," does not exist"
-      stop
-    end if
-
-    NDRFT = 0
-    open(unit=inlag,file=trim(STARTSEED),status='old')
-    do
-      read(inlag,*,iostat=stat) junk
-      if (stat /= 0) exit
-      if (len_trim(junk) > 0) NDRFT = NDRFT + 1
-    end do
-    rewind(inlag)
+    call nc_open_file(SEEDFN, fileid)
+    call nc_dim("number", fileid, NDRFT)
 
     !------------------------------------------------------------------------------|
     !  Initialize particle tracking arrays                                         |
@@ -196,21 +179,24 @@ contains
     allocate(LAG_ZP(NDRFT))
     allocate(LAG_D(NDRFT))
     allocate(start_in(NDRFT), stop_in(NDRFT))
+    allocate(xp(NDRFT), yp(NDRFT))
 
     LAG_HOST     = 0
     LAG_INDOMAIN = .true.
 
     !------------------------------------------------------------------------------|
-    !  Scan in the initial particle position file                                  |
+    !  Read in the initial particle position file                                  |
     !------------------------------------------------------------------------------|
-    do i = 1,NDRFT
-      read(inlag,*,iostat=stat) LAG_ID(i),LAG_XP(i),LAG_YP(i),LAG_D(i),start_in(i),stop_in(i)
-      if (stat /= 0) then
-        write(*,*) "ERROR: Problem reading the initial position file: ",trim(STARTSEED)
-        stop
-      end if
-    end do
-    close(inlag)
+    call nc_1d_var("number",  fileid, NDRFT, LAG_ID)
+    call nc_1d_var("x",       fileid, NDRFT, xp)
+    call nc_1d_var("y",       fileid, NDRFT, yp)
+    call nc_1d_var("z",       fileid, NDRFT, LAG_D)
+    call nc_1d_var("release", fileid, NDRFT, start_in)
+    call nc_1d_var("end",     fileid, NDRFT, stop_in)
+    call nc_close_file(fileid)
+
+    LAG_XP = xp
+    LAG_YP = yp
 
     !------------------------------------------------------------------------------|
     !  Convert external mjd to internal seconds                                    |
@@ -220,10 +206,10 @@ contains
     LAG_STOP  = int((stop_in - SIM_START_MJD)*86400.0)
 
     !------------------------------------------------------------------------------|
-    !  Locate the particle in the domain                                           |
+    !  Locate the domain element the particles reside in                           |
     !------------------------------------------------------------------------------|
     do i = 1,NDRFT
-      call fhe_robust(LAG_XP(i),LAG_YP(i),LAG_HOST(i),LAG_INDOMAIN(i))
+      call fhe_robust(LAG_XP(i), LAG_YP(i), LAG_HOST(i), LAG_INDOMAIN(i))
     end do
   end subroutine read_seed
 
