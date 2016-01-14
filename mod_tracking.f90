@@ -45,6 +45,7 @@ contains
     !  Read initial partical positions from the seed file                          |
     !------------------------------------------------------------------------------|
     call read_seed()
+    call nc_new_outfile(OUTFN, NDRFT, LAG_ID)
 
     !------------------------------------------------------------------------------|
     !  Find particle tracking simulated end time                                   |
@@ -167,15 +168,15 @@ contains
     !------------------------------------------------------------------------------|
     !  Retrive the number of particles in the tracking simulation                  |
     !------------------------------------------------------------------------------|
-    call nc_open_file(SEEDFN, fileid)
+    call nc_open_file(SEEDFN, .false., fileid)
     call nc_dim("number", fileid, NDRFT)
 
     !------------------------------------------------------------------------------|
     !  Initialize particle tracking arrays                                         |
     !------------------------------------------------------------------------------|
-    allocate(LAG_ID(NDRFT),LAG_HOST(NDRFT))
-    allocate(LAG_INDOMAIN(NDRFT),LAG_START(NDRFT),LAG_STOP(NDRFT))
-    allocate(LAG_XP(NDRFT),LAG_YP(NDRFT))
+    allocate(LAG_ID(NDRFT), LAG_HOST(NDRFT))
+    allocate(LAG_INDOMAIN(NDRFT), LAG_START(NDRFT), LAG_STOP(NDRFT))
+    allocate(LAG_XP(NDRFT), LAG_YP(NDRFT))
     allocate(LAG_ZP(NDRFT))
     allocate(LAG_D(NDRFT))
     allocate(start_in(NDRFT), stop_in(NDRFT))
@@ -221,23 +222,20 @@ contains
     !==============================================================================|
     !  Write particle track to output file                                         |
     !==============================================================================|
-    !  file format (By column, each row defines a diffrent particle)               |
-    !                                                                              |
-    !   PARAMETER      | TYPE | DESCRIPTION                                        |
+    !    VARIABLE      | TYPE | DESCRIPTION                                        |
     !  ----------------|------|--------------------------------                    |
-    !   ID             | INT  | Arbitrary identifier                               |
-    !   X              | REAL | Domain co-ordinates (meters)                       |
-    !   Y              | REAL | Domain co-ordinates (meters)                       |
-    !   Z              | REAL | Particle depth (meters)                            |
-    !   TIME           | REAL | Time of particle record (mjd)                      |
+    !   time           | REAL | Time of particle record (mjd)                      |
+    !   number         | INT  | Arbitrary identifier                               |
+    !   x              | REAL | Domain co-ordinates (meters)                       |
+    !   y              | REAL | Domain co-ordinates (meters)                       |
+    !   z              | REAL | Particle depth (meters)                            |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
     real(DP), dimension(NODES), intent(in) :: el
     !------------------------------------------------------------------------------|
-    integer                    :: i
-    integer                    :: outf
-    logical                    :: fexist
+    integer                    :: outid
+    integer                    :: records
     real(DP), dimension(NDRFT) :: hp, elp
     real(DP), dimension(NDRFT) :: z_pos
     real                       :: sim_time_mjd
@@ -246,17 +244,13 @@ contains
     !------------------------------------------------------------------------------|
     !  Open the output file for writing                                            |
     !------------------------------------------------------------------------------|
-    inquire(file=trim(OUTFN),exist=fexist)
-    if (fexist) then
-      open(outf,file=trim(OUTFN),status="old",position="append")
-    else
-      open(outf,file=trim(OUTFN),status="new")
-    end if
+    call nc_open_file(OUTFN, .true., outid)
+    call nc_dim("time", outid, records)
 
     !------------------------------------------------------------------------------|
     !  Shift z-coordinate to output domain                                         |
     !------------------------------------------------------------------------------|
-    call interp_elh(NDRFT,LAG_HOST,LAG_XP,LAG_YP,el,hp,elp)
+    call interp_elh(NDRFT, LAG_HOST, LAG_XP, LAG_YP, el, hp, elp)
     if (F_DEPTH) then
       z_pos = 0.0_dp - LAG_D/(hp + elp)
     else
@@ -268,14 +262,13 @@ contains
     !------------------------------------------------------------------------------|
     !  Append particle records to the output file                                  |
     !------------------------------------------------------------------------------|
+    records = records + 1
     sim_time_mjd = float(SIM_TIME)/86400.0 + SIM_START_MJD
-    do i = 1,NDRFT
-      write(outf,100) LAG_ID(i),LAG_XP(i),LAG_YP(i),z_pos(i),sim_time_mjd
-    end do
-
-    close(outf)
-    return
-100 format(i10,f14.2,f14.2,f9.2,f12.4)
+    call nc_1d_write("time", outid, records, sim_time_mjd)
+    call nc_2d_write("x", outid, records, NDRFT, real(LAG_XP))
+    call nc_2d_write("y", outid, records, NDRFT, real(LAG_YP))
+    call nc_2d_write("z", outid, records, NDRFT, real(z_pos))
+    call nc_close_file(outid)
   end subroutine write_track
 
 end module mod_tracking

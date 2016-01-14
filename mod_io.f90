@@ -7,26 +7,34 @@ module mod_io
 
 contains
 
-  subroutine nc_open_file(filepath, fileid)
+  subroutine nc_open_file(filepath, writemode, fileid)
     !==============================================================================|
     !  Prepare to read from the provided NetCDF file                               |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
     character(len=*), intent(in)  :: filepath
+    logical,          intent(in)  :: writemode
     integer,          intent(out) :: fileid
     !------------------------------------------------------------------------------|
     logical :: fexist
     integer :: ierr
+    integer :: mode
     !==============================================================================|
 
     inquire(file=filepath, exist=fexist)
-    if(.not.fexist) then
+    if (.not.fexist) then
       write(*,*) "ERROR: NetCDF file ", filepath, " does not exist!"
       stop
     end if
 
-    ierr = nf90_open(filepath, NF90_NOWRITE, fileid)
+    if (writemode) then
+        mode = NF90_WRITE
+    else
+        mode = NF90_NOWRITE
+    end if
+
+    ierr = nf90_open(filepath, mode, fileid)
     call handle_ncerror(ierr)
   end subroutine nc_open_file
 
@@ -48,6 +56,82 @@ contains
     ierr = nf90_close(fileid)
     call handle_ncerror(ierr)
   end subroutine nc_close_file
+
+  !==============================================================================|
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+  !==============================================================================|
+
+  subroutine nc_new_outfile(filepath, npoint, points)
+    !==============================================================================|
+    !  Create a new NetCDF file to recieve the simulation output                   |
+    !==============================================================================|
+    implicit none
+    !------------------------------------------------------------------------------|
+    character(len=*),           intent(in) :: filepath
+    integer,                    intent(in) :: npoint
+    integer, dimension(npoint), intent(in) :: points
+    !------------------------------------------------------------------------------|
+    integer :: ierr
+    integer :: fid
+    integer :: timeid, numid, numvarid, id
+    !==============================================================================|
+
+    ierr = nf90_create(filepath, NF90_CLOBBER, fid)
+    call handle_ncerror(ierr)
+
+    ierr = nf90_def_dim(fid, "time", NF90_UNLIMITED, timeid)
+    call handle_ncerror(ierr)
+    ierr = nf90_def_dim(fid, "number", npoint, numid)
+    call handle_ncerror(ierr)
+
+    ierr = nf90_def_var(fid, "time", NF90_FLOAT, [timeid], id)
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "long_name", "Simulation Time")
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "units", "days since 1858-11-17 00:00:00 +0:00")
+    call handle_ncerror(ierr)
+
+    ierr = nf90_def_var(fid, "number", NF90_INT, [numid], numvarid)
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, numvarid, "long_name", "Particle Identifier")
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, numvarid, "standard_name", "id")
+    call handle_ncerror(ierr)
+
+    ierr = nf90_def_var(fid, "x", NF90_FLOAT, [numid,timeid], id)
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "long_name", "Domain X-Coordinate")
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "units", "meters")
+    call handle_ncerror(ierr)
+
+    ierr = nf90_def_var(fid, "y", NF90_FLOAT, [numid,timeid], id)
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "long_name", "Domain Y-Coordinate")
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "units", "meters")
+    call handle_ncerror(ierr)
+
+    ierr = nf90_def_var(fid, "z", NF90_FLOAT, [numid,timeid], id)
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "long_name", "Domain Z-Coordinate")
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "standard_name", "depth")
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "units", "meters")
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "positive", "down")
+    call handle_ncerror(ierr)
+
+    ierr = nf90_enddef(fid)
+    call handle_ncerror(ierr)
+
+    ierr = nf90_put_var(fid, numvarid, points, [1], [npoint])
+    call handle_ncerror(ierr)
+
+    ierr = nf90_close(fid)
+    call handle_ncerror(ierr)
+  end subroutine nc_new_outfile
 
   !==============================================================================|
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
@@ -91,7 +175,6 @@ contains
     !------------------------------------------------------------------------------|
     integer                      :: ierr
     integer                      :: varid
-    character(len=NF90_MAX_NAME) :: temp
     !==============================================================================|
 
     ierr = nf90_inq_varid(fileid, varname, varid)
@@ -113,7 +196,6 @@ contains
     !------------------------------------------------------------------------------|
     integer                      :: ierr
     integer                      :: varid
-    character(len=NF90_MAX_NAME) :: temp
     !==============================================================================|
 
     ierr = nf90_inq_varid(fileid, varname, varid)
@@ -139,7 +221,6 @@ contains
     !------------------------------------------------------------------------------|
     integer                      :: ierr
     integer                      :: varid
-    character(len=NF90_MAX_NAME) :: temp
     !==============================================================================|
 
     ierr = nf90_inq_varid(fileid, varname, varid)
@@ -165,7 +246,6 @@ contains
     !------------------------------------------------------------------------------|
     integer                      :: ierr
     integer                      :: varid
-    character(len=NF90_MAX_NAME) :: temp
     !==============================================================================|
 
     ierr = nf90_inq_varid(fileid, varname, varid)
@@ -173,6 +253,53 @@ contains
     ierr = nf90_get_var(fileid, varid, values, [1,1,1], [nval1,nval2,nval3])
     call handle_ncerror(ierr)
   end subroutine nc_3d_var
+
+  !==============================================================================|
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+  !==============================================================================|
+
+  subroutine nc_1d_write(varname, fileid, location, value)
+    !==============================================================================|
+    !  Read the value of the named variable from the provided NetCDF file          |
+    !==============================================================================|
+    implicit none
+    !------------------------------------------------------------------------------|
+    character(len=*), intent(in) :: varname
+    integer,          intent(in) :: fileid
+    integer,          intent(in) :: location
+    real,             intent(in) :: value
+    !------------------------------------------------------------------------------|
+    integer :: ierr
+    integer :: varid
+    !==============================================================================|
+
+    ierr = nf90_inq_varid(fileid, varname, varid)
+    call handle_ncerror(ierr)
+    ierr = nf90_put_var(fileid, varid, [value], [location], [1])
+    call handle_ncerror(ierr)
+  end subroutine nc_1d_write
+
+  subroutine nc_2d_write(varname, fileid, location, length, values)
+    !==============================================================================|
+    !  Read the value of the named variable from the provided NetCDF file          |
+    !==============================================================================|
+    implicit none
+    !------------------------------------------------------------------------------|
+    character(len=*),        intent(in) :: varname
+    integer,                 intent(in) :: fileid
+    integer,                 intent(in) :: location
+    integer,                 intent(in) :: length
+    real, dimension(length), intent(in) :: values
+    !------------------------------------------------------------------------------|
+    integer :: ierr
+    integer :: varid
+    !==============================================================================|
+
+    ierr = nf90_inq_varid(fileid, varname, varid)
+    call handle_ncerror(ierr)
+    ierr = nf90_put_var(fileid, varid, values, [1,location], [length,1])
+    call handle_ncerror(ierr)
+  end subroutine nc_2d_write
 
   !==============================================================================|
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
