@@ -1,10 +1,10 @@
 module mod_io
   use netcdf
 
-  interface nc_1d_var
-    module procedure nc_1d_int_var, nc_1d_real_var
+  interface nc_read_var
+    module procedure nc_read_int_var, nc_read_int_var2
+    module procedure nc_read_real_var, nc_read_real_var2, nc_read_real_var3
   end interface
-
 contains
 
   subroutine nc_open_file(filepath, writemode, fileid)
@@ -137,7 +137,7 @@ contains
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine nc_dim(dimname, fileid, value)
+  subroutine nc_dim(fileid, dimname, value)
     !==============================================================================|
     !  Read the value of the named dimmension from the provided NetCDF file        |
     !==============================================================================|
@@ -162,103 +162,190 @@ contains
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine nc_1d_int_var(varname, fileid, nval, values)
+  subroutine nc_read_int_var(fileid, varname, values)
     !==============================================================================|
     !  Read the value of the named variable from the provided NetCDF file          |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    character(len=*),         intent(in)  :: varname
-    integer,                  intent(in)  :: fileid
-    integer,                  intent(in)  :: nval
-    integer, dimension(nval), intent(out) :: values
+    character(len=*),      intent(in)  :: varname
+    integer,               intent(in)  :: fileid
+    integer, dimension(:), intent(out) :: values
     !------------------------------------------------------------------------------|
-    integer                      :: ierr
-    integer                      :: varid
+    integer :: ierr
+    integer :: varid
     !==============================================================================|
 
     ierr = nf90_inq_varid(fileid, varname, varid)
     call handle_ncerror(ierr)
-    ierr = nf90_get_var(fileid, varid, values, [1], [nval])
+    ierr = nf90_get_var(fileid, varid, values)
     call handle_ncerror(ierr)
-  end subroutine nc_1d_int_var
+  end subroutine nc_read_int_var
 
-  subroutine nc_1d_real_var(varname, fileid, nval, values)
+  subroutine nc_read_int_var2(fileid, varname, values)
     !==============================================================================|
     !  Read the value of the named variable from the provided NetCDF file          |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    character(len=*),         intent(in)  :: varname
-    integer,                  intent(in)  :: fileid
-    integer,                  intent(in)  :: nval
-    real,    dimension(nval), intent(out) :: values
+    character(len=*),        intent(in)  :: varname
+    integer,                 intent(in)  :: fileid
+    integer, dimension(:,:), intent(out) :: values
     !------------------------------------------------------------------------------|
-    integer                      :: ierr
-    integer                      :: varid
+    integer :: ierr
+    integer :: varid
     !==============================================================================|
 
     ierr = nf90_inq_varid(fileid, varname, varid)
     call handle_ncerror(ierr)
-    ierr = nf90_get_var(fileid, varid, values, [1], [nval])
+    ierr = nf90_get_var(fileid, varid, values)
     call handle_ncerror(ierr)
-  end subroutine nc_1d_real_var
+  end subroutine nc_read_int_var2
+
+  subroutine nc_read_real_var(fileid, varname, values)
+    !==============================================================================|
+    !  Read the value of the named variable from the provided NetCDF file          |
+    !==============================================================================|
+    implicit none
+    !------------------------------------------------------------------------------|
+    character(len=*),   intent(in)  :: varname
+    integer,            intent(in)  :: fileid
+    real, dimension(:), intent(out) :: values
+    !------------------------------------------------------------------------------|
+    integer :: ierr
+    integer :: varid
+    !==============================================================================|
+
+    ierr = nf90_inq_varid(fileid, varname, varid)
+    call handle_ncerror(ierr)
+    ierr = nf90_get_var(fileid, varid, values)
+    call handle_ncerror(ierr)
+  end subroutine nc_read_real_var
+
+  subroutine nc_read_real_var2(fileid, varname, values)
+    !==============================================================================|
+    !  Read the value of the named variable from the provided NetCDF file          |
+    !==============================================================================|
+    implicit none
+    !------------------------------------------------------------------------------|
+    character(len=*),     intent(in)  :: varname
+    integer,              intent(in)  :: fileid
+    real, dimension(:,:), intent(out) :: values
+    !------------------------------------------------------------------------------|
+    integer :: ierr
+    integer :: varid
+    !==============================================================================|
+
+    ierr = nf90_inq_varid(fileid, varname, varid)
+    call handle_ncerror(ierr)
+    ierr = nf90_get_var(fileid, varid, values)
+    call handle_ncerror(ierr)
+  end subroutine nc_read_real_var2
+
+  subroutine nc_read_real_var3(fileid, varname, values)
+    !==============================================================================|
+    !  Read the value of the named variable from the provided NetCDF file          |
+    !==============================================================================|
+    implicit none
+    !------------------------------------------------------------------------------|
+    character(len=*),       intent(in)  :: varname
+    integer,                intent(in)  :: fileid
+    real, dimension(:,:,:), intent(out) :: values
+    !------------------------------------------------------------------------------|
+    integer :: ierr
+    integer :: varid
+    !==============================================================================|
+
+    ierr = nf90_inq_varid(fileid, varname, varid)
+    call handle_ncerror(ierr)
+    ierr = nf90_get_var(fileid, varid, values)
+    call handle_ncerror(ierr)
+  end subroutine nc_read_real_var3
 
   !==============================================================================|
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine nc_2d_var(varname, fileid, nval1, nval2, values)
+  subroutine nc_1d_read(fileid, varname, tindex, value)
     !==============================================================================|
     !  Read the value of the named variable from the provided NetCDF file          |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    character(len=*),                intent(in)  :: varname
-    integer,                         intent(in)  :: fileid
-    integer,                         intent(in)  :: nval1, nval2
-    integer, dimension(nval1,nval2), intent(out) :: values
+    character(len=*), intent(in)  :: varname
+    integer,          intent(in)  :: fileid
+    integer,          intent(in)  :: tindex
+    real,             intent(out) :: value
     !------------------------------------------------------------------------------|
-    integer                      :: ierr
-    integer                      :: varid
+    integer            :: ierr
+    integer            :: varid
+    real, dimension(1) :: temp
     !==============================================================================|
 
     ierr = nf90_inq_varid(fileid, varname, varid)
     call handle_ncerror(ierr)
-    ierr = nf90_get_var(fileid, varid, values, [1,1], [nval1,nval2])
+    ierr = nf90_get_var(fileid, varid, temp, [tindex], [1])
     call handle_ncerror(ierr)
-  end subroutine nc_2d_var
+    value = temp(1)
+  end subroutine nc_1d_read
 
   !==============================================================================|
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine nc_3d_var(varname, fileid, nval1, nval2, nval3, values)
+  subroutine nc_2d_read(fileid, varname, tindex, nval, values)
     !==============================================================================|
     !  Read the value of the named variable from the provided NetCDF file          |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    character(len=*),                      intent(in)  :: varname
-    integer,                               intent(in)  :: fileid
-    integer,                               intent(in)  :: nval1, nval2, nval3
-    integer, dimension(nval1,nval2,nval3), intent(out) :: values
+    character(len=*),      intent(in)  :: varname
+    integer,               intent(in)  :: fileid
+    integer,               intent(in)  :: tindex
+    integer,               intent(in)  :: nval
+    real, dimension(nval), intent(out) :: values
     !------------------------------------------------------------------------------|
-    integer                      :: ierr
-    integer                      :: varid
+    integer :: ierr
+    integer :: varid
     !==============================================================================|
 
     ierr = nf90_inq_varid(fileid, varname, varid)
     call handle_ncerror(ierr)
-    ierr = nf90_get_var(fileid, varid, values, [1,1,1], [nval1,nval2,nval3])
+    ierr = nf90_get_var(fileid, varid, values, [1,tindex], [nval,1])
     call handle_ncerror(ierr)
-  end subroutine nc_3d_var
+  end subroutine nc_2d_read
 
   !==============================================================================|
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine nc_1d_write(varname, fileid, location, value)
+  subroutine nc_3d_read(fileid, varname, tindex, nval1, nval2, values)
+    !==============================================================================|
+    !  Read the value of the named variable from the provided NetCDF file          |
+    !==============================================================================|
+    implicit none
+    !------------------------------------------------------------------------------|
+    character(len=*),             intent(in)  :: varname
+    integer,                      intent(in)  :: fileid
+    integer,                      intent(in)  :: tindex
+    integer,                      intent(in)  :: nval1, nval2
+    real, dimension(nval1,nval2), intent(out) :: values
+    !------------------------------------------------------------------------------|
+    integer :: ierr
+    integer :: varid
+    !==============================================================================|
+
+    ierr = nf90_inq_varid(fileid, varname, varid)
+    call handle_ncerror(ierr)
+    ierr = nf90_get_var(fileid, varid, values, [1,1,tindex], [nval1,nval2,1])
+    call handle_ncerror(ierr)
+  end subroutine nc_3d_read
+
+  !==============================================================================|
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+  !==============================================================================|
+
+  subroutine nc_1d_write(fileid, varname, location, value)
     !==============================================================================|
     !  Read the value of the named variable from the provided NetCDF file          |
     !==============================================================================|
@@ -279,7 +366,11 @@ contains
     call handle_ncerror(ierr)
   end subroutine nc_1d_write
 
-  subroutine nc_2d_write(varname, fileid, location, length, values)
+  !==============================================================================|
+  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+  !==============================================================================|
+
+  subroutine nc_2d_write(fileid, varname, location, length, values)
     !==============================================================================|
     !  Read the value of the named variable from the provided NetCDF file          |
     !==============================================================================|

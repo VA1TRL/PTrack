@@ -4,7 +4,7 @@ module mod_flow_field
   !==============================================================================|
   use mod_prec
   use mod_config
-  use netcdf
+  use mod_io
   implicit none
   save
   !==============================================================================|
@@ -56,68 +56,45 @@ contains
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    integer                      :: ierr
-    integer                      :: maxelem
-    integer                      :: dimid, fid
-    character(len=NF90_MAX_NAME) :: temp
+    integer :: maxelem
+    integer :: fileid
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
     !  Open NetCDF data file                                                       |
     !------------------------------------------------------------------------------|
-    ierr = nf90_open(trim(GRIDFN),NF90_NOWRITE,fid)
-    call handle_ncerror(ierr)
+    call nc_open_file(GRIDFN, .false., fileid)
 
     !------------------------------------------------------------------------------|
     !  Get model dimensions                                                        |
     !------------------------------------------------------------------------------|
-    ierr = nf90_inq_dimid(fid,"nele",dimid)
-    call handle_ncerror(ierr)
-    ierr = nf90_inquire_dimension(fid,dimid,temp,ELEMENTS)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_dimid(fid,"node",dimid)
-    call handle_ncerror(ierr)
-    ierr = nf90_inquire_dimension(fid,dimid,temp,NODES)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_dimid(fid,"siglay",dimid)
-    call handle_ncerror(ierr)
-    ierr = nf90_inquire_dimension(fid,dimid,temp,SIGLAY)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_dimid(fid,"siglev",dimid)
-    call handle_ncerror(ierr)
-    ierr = nf90_inquire_dimension(fid,dimid,temp,SIGLEV)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_dimid(fid,"maxelem",dimid)
-    call handle_ncerror(ierr)
-    ierr = nf90_inquire_dimension(fid,dimid,temp,maxelem)
-    call handle_ncerror(ierr)
+    call nc_dim(fileid, "nele",    ELEMENTS)
+    call nc_dim(fileid, "node",    NODES)
+    call nc_dim(fileid, "siglay",  SIGLAY)
+    call nc_dim(fileid, "siglev",  SIGLEV)
+    call nc_dim(fileid, "maxelem", maxelem)
 
     !------------------------------------------------------------------------------|
     !  Close file                                                                  |
     !------------------------------------------------------------------------------|
-    ierr = nf90_close(fid)
-    call handle_ncerror(ierr)
+    call nc_close_file(fileid)
 
     !------------------------------------------------------------------------------|
     !  Allocate space for grid information                                         |
     !------------------------------------------------------------------------------|
-    allocate(XP(NODES),YP(NODES))
-    allocate(XC(ELEMENTS),YC(ELEMENTS))
+    allocate(XP(NODES), YP(NODES))
+    allocate(XC(ELEMENTS), YC(ELEMENTS))
     allocate(H(NODES))
-    allocate(Z_LEV(SIGLEV),Z_LAY(SIGLAY))
-    allocate(A1U(ELEMENTS,4),A2U(ELEMENTS,4))
+    allocate(Z_LEV(SIGLEV), Z_LAY(SIGLAY))
+    allocate(A1U(ELEMENTS,4), A2U(ELEMENTS,4))
     allocate(AW0(ELEMENTS,3))
-    allocate(AWX(ELEMENTS,3),AWY(ELEMENTS,3))
-    allocate(NV(ELEMENTS,3),NBE(ELEMENTS,3))
-    allocate(NTVE(NODES),NBVE(NODES,maxelem))
-    allocate(U_START(ELEMENTS,SIGLAY),U_END(ELEMENTS,SIGLAY))
-    allocate(V_START(ELEMENTS,SIGLAY),V_END(ELEMENTS,SIGLAY))
-    allocate(W_START(ELEMENTS,SIGLAY),W_END(ELEMENTS,SIGLAY))
-    allocate(EL_START(NODES),EL_END(NODES))
+    allocate(AWX(ELEMENTS,3), AWY(ELEMENTS,3))
+    allocate(NV(ELEMENTS,3), NBE(ELEMENTS,3))
+    allocate(NTVE(NODES), NBVE(NODES,maxelem))
+    allocate(U_START(ELEMENTS,SIGLAY), U_END(ELEMENTS,SIGLAY))
+    allocate(V_START(ELEMENTS,SIGLAY), V_END(ELEMENTS,SIGLAY))
+    allocate(W_START(ELEMENTS,SIGLAY), W_END(ELEMENTS,SIGLAY))
+    allocate(EL_START(NODES), EL_END(NODES))
 
     !------------------------------------------------------------------------------|
     !  Initialize grid information arrays                                          |
@@ -136,121 +113,57 @@ contains
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    integer                           :: ierr
-    integer                           :: dimid, varid, fid
+    integer                           :: fileid
     real, allocatable, dimension(:,:) :: tmp
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
     !  Open NetCDF data file                                                       |
     !------------------------------------------------------------------------------|
-    ierr = nf90_open(trim(GRIDFN),NF90_NOWRITE,fid)
-    call handle_ncerror(ierr)
+    call nc_open_file(GRIDFN, .false., fileid)
 
     !------------------------------------------------------------------------------|
     !  Get node co-ordinates                                                       |
     !------------------------------------------------------------------------------|
-    ierr = nf90_inq_varid(fid,"x",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,XP)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_varid(fid,"y",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,YP)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_varid(fid,"xc",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,XC)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_varid(fid,"yc",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,YC)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_varid(fid,"h",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,H)
-    call handle_ncerror(ierr)
+    call nc_read_var(fileid, "x",    XP)
+    call nc_read_var(fileid, "y",    YP)
+    call nc_read_var(fileid, "xc",   XC)
+    call nc_read_var(fileid, "yc",   YC)
+    call nc_read_var(fileid, "h",    H)
+    call nc_read_var(fileid, "nv",   NV)
+    call nc_read_var(fileid, "nbe",  NBE)
+    call nc_read_var(fileid, "ntve", NTVE)
+    call nc_read_var(fileid, "nbve", NBVE)
 
     allocate(tmp(NODES,SIGLEV))
-    ierr = nf90_inq_varid(fid,"siglev",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,tmp)
-    call handle_ncerror(ierr)
+    call nc_read_var(fileid, "siglev", tmp)
     Z_LEV = tmp(1,:)
     deallocate(tmp)
-
     allocate(tmp(NODES,SIGLAY))
-    ierr = nf90_inq_varid(fid,"siglay",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,tmp)
-    call handle_ncerror(ierr)
+    call nc_read_var(fileid, "siglay", tmp)
     Z_LAY = tmp(1,:)
     deallocate(tmp)
-
-    ierr = nf90_inq_varid(fid,"nv",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,NV)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_varid(fid,"nbe",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,NBE)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_varid(fid,"ntve",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,NTVE)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_varid(fid,"nbve",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,NBVE)
-    call handle_ncerror(ierr)
 
     !------------------------------------------------------------------------------|
     !  Get interpolation parameters                                                |
     !------------------------------------------------------------------------------|
-    ierr = nf90_inq_varid(fid,"a1u",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,A1U)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_varid(fid,"a2u",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,A2U)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_varid(fid,"aw0",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,AW0)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_varid(fid,"awx",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,AWX)
-    call handle_ncerror(ierr)
-
-    ierr = nf90_inq_varid(fid,"awy",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,AWY)
-    call handle_ncerror(ierr)
+    call nc_read_var(fileid, "a1u", A1U)
+    call nc_read_var(fileid, "a2u", A2U)
+    call nc_read_var(fileid, "aw0", AW0)
+    call nc_read_var(fileid, "awx", AWX)
+    call nc_read_var(fileid, "awy", AWY)
 
     !------------------------------------------------------------------------------|
     !  Close file                                                                  |
     !------------------------------------------------------------------------------|
-    ierr = nf90_close(fid)
-    call handle_ncerror(ierr)
+    call nc_close_file(fileid)
   end subroutine ncd_read_grid
 
   !==============================================================================|
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine get_flow_at(u,v,w,el,time)
+  subroutine get_flow_at(u, v, w, el, time)
     !==============================================================================|
     !  Get the flow field corrosponding to the provided time (MJD format) by       |
     !  interpolating between the time-adjacent NetCDF records.                     |
@@ -269,16 +182,16 @@ contains
     !------------------------------------------------------------------------------|
     if (NC_RECORD < 0) then
       NC_RECORD = timeIndex(time)
-      call read_flow(U_START,V_START,W_START,EL_START,T_START,NC_RECORD)
+      call read_flow(U_START, V_START, W_START, EL_START, T_START, NC_RECORD)
       NC_RECORD = NC_RECORD + 1
-      call read_flow(U_END,V_END,W_END,EL_END,T_END,NC_RECORD)
+      call read_flow(U_END, V_END, W_END, EL_END, T_END, NC_RECORD)
     end if
 
     !------------------------------------------------------------------------------|
     !  Update forcing records if nessesairy                                        |
     !------------------------------------------------------------------------------|
     if (time > T_END) then
-      write(*,*) "Done Processing: ",NC_RECORD,", simulation time (mjd): ",time
+      write(*,*) "Done Processing: ", NC_RECORD, ", simulation time (mjd): ", time
 
       U_START   = U_END
       V_START   = V_END
@@ -287,7 +200,7 @@ contains
       T_START   = T_END
       NC_RECORD = NC_RECORD + 1
 
-      call read_flow(U_END,V_END,W_END,EL_END,T_END,NC_RECORD)
+      call read_flow(U_END, V_END, W_END, EL_END, T_END, NC_RECORD)
     end if
 
     !------------------------------------------------------------------------------|
@@ -295,7 +208,6 @@ contains
     !------------------------------------------------------------------------------|
     frac_start = (T_END - time)/(T_END - T_START)
     frac_end   = (time - T_START)/(T_END - T_START)
-
     u  = frac_start*U_START  + frac_end*U_END
     v  = frac_start*V_START  + frac_end*V_END
     w  = frac_start*W_START  + frac_end*W_END
@@ -306,7 +218,7 @@ contains
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine read_flow(u,v,w,el,time,n)
+  subroutine read_flow(u, v, w, el, time, n)
     !==============================================================================|
     !  Read flow field vectors from NetCDF file                                    |
     !==============================================================================|
@@ -317,57 +229,27 @@ contains
     real,                             intent(out) :: time
     integer,                          intent(in)  :: n
     !------------------------------------------------------------------------------|
-    integer            :: ierr
-    integer            :: fid, varid
-    real, dimension(1) :: tmp
+    integer :: fileid
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
     !  Open NetCDF data file                                                       |
     !------------------------------------------------------------------------------|
-    ierr = nf90_open(trim(GRIDFN),NF90_NOWRITE,fid)
-    call handle_ncerror(ierr)
+    call nc_open_file(GRIDFN, .false., fileid)
 
     !------------------------------------------------------------------------------|
     !  Read flow field data from NetCDF file at specified time index               |
     !------------------------------------------------------------------------------|
-
-    ! Time step
-    ierr = nf90_inq_varid(fid,"time",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,tmp,[n],[1])
-    time = tmp(1)
-    call handle_ncerror(ierr)
-
-    ! Free surface elevation
-    ierr = nf90_inq_varid(fid,"zeta",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,el,[1,n],[NODES,1])
-    call handle_ncerror(ierr)
-
-    ! Eastward warter velocity
-    ierr = nf90_inq_varid(fid,"u",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,u,[1,1,n],[ELEMENTS,SIGLAY,1])
-    call handle_ncerror(ierr)
-
-    ! Northward water velocity
-    ierr = nf90_inq_varid(fid,"v",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,v,[1,1,n],[ELEMENTS,SIGLAY,1])
-    call handle_ncerror(ierr)
-
-    ! Upward water velocity
-    ierr = nf90_inq_varid(fid,"ww",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,w,[1,1,n],[ELEMENTS,SIGLAY,1])
-    call handle_ncerror(ierr)
+    call nc_1d_read(fileid, "time", n, time)
+    call nc_2d_read(fileid, "zeta", n, NODES,    el)
+    call nc_3d_read(fileid, "u",    n, ELEMENTS, SIGLAY, u)
+    call nc_3d_read(fileid, "v",    n, ELEMENTS, SIGLAY, v)
+    call nc_3d_read(fileid, "ww",   n, ELEMENTS, SIGLAY, w)
 
     !------------------------------------------------------------------------------|
     !  Close file                                                                  |
     !------------------------------------------------------------------------------|
-    ierr = nf90_close(fid)
-    call handle_ncerror(ierr)
+    call nc_close_file(fileid)
   end subroutine read_flow
 
   !==============================================================================|
@@ -387,38 +269,27 @@ contains
     integer          :: n
     !------------------------------------------------------------------------------|
     real, allocatable, dimension(:) :: field_times
-    character(len=NF90_MAX_NAME)    :: temp
     integer                         :: sizet
-    integer                         :: ierr
-    integer                         :: fid, dimid, varid
+    integer                         :: fileid
     integer                         :: i
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
     !  Open NetCDF data file                                                       |
     !------------------------------------------------------------------------------|
-    ierr = nf90_open(trim(GRIDFN),NF90_NOWRITE,fid)
-    call handle_ncerror(ierr)
+    call nc_open_file(GRIDFN, .false., fileid)
 
     !------------------------------------------------------------------------------|
     !  Get the time records                                                        |
     !------------------------------------------------------------------------------|
-    ierr = nf90_inq_dimid(fid,"time",dimid)
-    call handle_ncerror(ierr)
-    ierr = nf90_inquire_dimension(fid,dimid,temp,sizet)
-    call handle_ncerror(ierr)
+    call nc_dim(fileid, "time", sizet)
     allocate(field_times(sizet))
-
-    ierr = nf90_inq_varid(fid,"time",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,field_times)
-    call handle_ncerror(ierr)
+    call nc_read_var(fileid, "time", field_times)
 
     !------------------------------------------------------------------------------|
     !  Close file                                                                  |
     !------------------------------------------------------------------------------|
-    ierr = nf90_close(fid)
-    call handle_ncerror(ierr)
+    call nc_close_file(fileid)
 
     !------------------------------------------------------------------------------|
     !  Find the NetCDF record that covers the provided time                        |
@@ -432,7 +303,7 @@ contains
       end do
     end if
 
-    write(*,*) "ERROR: Could not find time ",time," in NetCDF flow-field file!"
+    write(*,*) "ERROR: Could not find time ", time, " in NetCDF flow-field file!"
     stop
   end function timeIndex
 
@@ -450,38 +321,27 @@ contains
     logical          :: isVallid
     !------------------------------------------------------------------------------|
     real, allocatable, dimension(:) :: field_times
-    character(len=NF90_MAX_NAME)    :: temp
     integer                         :: sizet
-    integer                         :: ierr
-    integer                         :: fid, dimid, varid
+    integer                         :: fileid
     integer                         :: i
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
     !  Open NetCDF data file                                                       |
     !------------------------------------------------------------------------------|
-    ierr = nf90_open(trim(GRIDFN),NF90_NOWRITE,fid)
-    call handle_ncerror(ierr)
+    call nc_open_file(GRIDFN, .false., fileid)
 
     !------------------------------------------------------------------------------|
     !  Get the time records                                                        |
     !------------------------------------------------------------------------------|
-    ierr = nf90_inq_dimid(fid,"time",dimid)
-    call handle_ncerror(ierr)
-    ierr = nf90_inquire_dimension(fid,dimid,temp,sizet)
-    call handle_ncerror(ierr)
+    call nc_dim(fileid, "time", sizet)
     allocate(field_times(sizet))
-
-    ierr = nf90_inq_varid(fid,"time",varid)
-    call handle_ncerror(ierr)
-    ierr = nf90_get_var(fid,varid,field_times)
-    call handle_ncerror(ierr)
+    call nc_read_var(fileid, "time", field_times)
 
     !------------------------------------------------------------------------------|
     !  Close file                                                                  |
     !------------------------------------------------------------------------------|
-    ierr = nf90_close(fid)
-    call handle_ncerror(ierr)
+    call nc_close_file(fileid)
 
     !------------------------------------------------------------------------------|
     !  Perform the check                                                           |
@@ -493,26 +353,6 @@ contains
     isVallid = .true.
     return
   end function check_field_time
-
-  !==============================================================================|
-  !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
-  !==============================================================================|
-
-  subroutine handle_ncerror(errid)
-    !==============================================================================|
-    !  Check for and handle NetCDF file I/O errors                                 |
-    !==============================================================================|
-    implicit none
-    !------------------------------------------------------------------------------|
-    integer, intent(in) :: errid
-    !==============================================================================|
-
-    if (errid /= NF90_NOERR) then
-      write(*,*) "ERROR: Accessing NetCDF file: ",trim(GRIDFN)
-      write(*,*) trim(nf90_strerror(errid))
-      stop
-    end if
-  end subroutine handle_ncerror
 
 end module mod_flow_field
 

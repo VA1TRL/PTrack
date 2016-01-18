@@ -62,10 +62,10 @@ contains
     !  Print statistics on lagrangian tracking to output                           |
     !------------------------------------------------------------------------------|
     write(*,*) "-- Lagrangian Tracking Informaion --"
-    write(*,*) "# Particles to track   : ",NDRFT
-    write(*,*) "# Sim. start time (mjd): ",SIM_START_MJD
-    write(*,*) "# Sim. end time (mjd)  : ",end_time_mjd
-    write(*,*) "# Time step (s)        : ",DTI
+    write(*,*) "# Particles to track   : ", NDRFT
+    write(*,*) "# Sim. start time (mjd): ", SIM_START_MJD
+    write(*,*) "# Sim. end time (mjd)  : ", end_time_mjd
+    write(*,*) "# Time step (s)        : ", DTI
   end subroutine init_tracking
 
   !==============================================================================|
@@ -89,14 +89,14 @@ contains
     !------------------------------------------------------------------------------|
     !  Get velocity field at the beginning of the simulation (time 0)              |
     !------------------------------------------------------------------------------|
-    call get_flow_at(up,vp,wp,elp,SIM_START_MJD)
+    call get_flow_at(up, vp, wp, elp, SIM_START_MJD)
 
     !------------------------------------------------------------------------------|
     !  Calculate the particle's initial sigma position                             |
     !------------------------------------------------------------------------------|
     allocate(h_part(NDRFT))
     allocate(el_part(NDRFT))
-    call interp_elh(NDRFT,LAG_HOST,LAG_XP,LAG_YP,elp,h_part,el_part)
+    call interp_elh(NDRFT, LAG_HOST, LAG_XP, LAG_YP, elp, h_part, el_part)
     LAG_ZP = 0.0_dp - LAG_D/(h_part + el_part)
     deallocate(h_part)
     deallocate(el_part)
@@ -116,12 +116,12 @@ contains
       !------------------------------------------------------------------------------|
       !  Get the velocity field for the current time step                            |
       !------------------------------------------------------------------------------|
-      call get_flow_at(u,v,w,el,SIM_START_MJD + float(SIM_TIME)/86400.0)
+      call get_flow_at(u, v, w, el, SIM_START_MJD + float(SIM_TIME)/86400.0)
 
       !------------------------------------------------------------------------------|
       !  Run the tracking simulation                                                 |
       !------------------------------------------------------------------------------|
-      call traject(up,u,vp,v,wp,w,elp,el)
+      call traject(up, u, vp, v, wp, w, elp, el)
       if (P_RND_WALK) call random_walk(el)
 
       !------------------------------------------------------------------------------|
@@ -169,7 +169,7 @@ contains
     !  Retrive the number of particles in the tracking simulation                  |
     !------------------------------------------------------------------------------|
     call nc_open_file(SEEDFN, .false., fileid)
-    call nc_dim("number", fileid, NDRFT)
+    call nc_dim(fileid, "number", NDRFT)
 
     !------------------------------------------------------------------------------|
     !  Initialize particle tracking arrays                                         |
@@ -188,12 +188,12 @@ contains
     !------------------------------------------------------------------------------|
     !  Read in the initial particle position file                                  |
     !------------------------------------------------------------------------------|
-    call nc_1d_var("number",  fileid, NDRFT, LAG_ID)
-    call nc_1d_var("x",       fileid, NDRFT, xp)
-    call nc_1d_var("y",       fileid, NDRFT, yp)
-    call nc_1d_var("z",       fileid, NDRFT, LAG_D)
-    call nc_1d_var("release", fileid, NDRFT, start_in)
-    call nc_1d_var("end",     fileid, NDRFT, stop_in)
+    call nc_read_var(fileid, "number",  LAG_ID)
+    call nc_read_var(fileid, "x",       xp)
+    call nc_read_var(fileid, "y",       yp)
+    call nc_read_var(fileid, "z",       LAG_D)
+    call nc_read_var(fileid, "release", start_in)
+    call nc_read_var(fileid, "end",     stop_in)
     call nc_close_file(fileid)
 
     LAG_XP = xp
@@ -234,7 +234,7 @@ contains
     !------------------------------------------------------------------------------|
     real(DP), dimension(NODES), intent(in) :: el
     !------------------------------------------------------------------------------|
-    integer                    :: outid
+    integer                    :: outid, i
     integer                    :: records
     real(DP), dimension(NDRFT) :: hp, elp
     real(DP), dimension(NDRFT) :: z_pos
@@ -245,7 +245,7 @@ contains
     !  Open the output file for writing                                            |
     !------------------------------------------------------------------------------|
     call nc_open_file(OUTFN, .true., outid)
-    call nc_dim("time", outid, records)
+    call nc_dim(outid, "time", records)
 
     !------------------------------------------------------------------------------|
     !  Shift z-coordinate to output domain                                         |
@@ -264,10 +264,10 @@ contains
     !------------------------------------------------------------------------------|
     records = records + 1
     sim_time_mjd = float(SIM_TIME)/86400.0 + SIM_START_MJD
-    call nc_1d_write("time", outid, records, sim_time_mjd)
-    call nc_2d_write("x", outid, records, NDRFT, real(LAG_XP))
-    call nc_2d_write("y", outid, records, NDRFT, real(LAG_YP))
-    call nc_2d_write("z", outid, records, NDRFT, real(z_pos))
+    call nc_1d_write(outid, "time", records, sim_time_mjd)
+    call nc_2d_write(outid, "x", records, NDRFT, real(LAG_XP))
+    call nc_2d_write(outid, "y", records, NDRFT, real(LAG_YP))
+    call nc_2d_write(outid, "z", records, NDRFT, real(z_pos))
     call nc_close_file(outid)
   end subroutine write_track
 
