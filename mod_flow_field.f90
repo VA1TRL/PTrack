@@ -346,7 +346,7 @@ contains
     !------------------------------------------------------------------------------|
     !  Perform the check                                                           |
     !------------------------------------------------------------------------------|
-    if (field_times(1) > time_start .or. field_times(sizet) <= time_end) then
+    if (field_times(1) > time_start .or. field_times(sizet) < time_end) then
       isVallid = .false.
       return 
     end if
