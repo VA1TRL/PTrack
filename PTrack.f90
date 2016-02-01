@@ -31,6 +31,7 @@ program particle_traj
   !------------------------------------------------------------------------------|
   !  Read configuration parameters controlling model run                         |
   !------------------------------------------------------------------------------|
+  write(*,*) "== Initializing Tracking Simulation =="
   call init_model
 
   !------------------------------------------------------------------------------|
@@ -44,7 +45,7 @@ program particle_traj
   write(*,*) "# Sigma layers        : ",SIGLAY
 
   !------------------------------------------------------------------------------|
-  !  Run the lagrangian particle tracking model                                  |
+  !  Run the Lagrangian particle tracking model                                  |
   !------------------------------------------------------------------------------|
   call init_tracking
   call run_tracking

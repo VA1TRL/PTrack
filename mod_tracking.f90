@@ -21,15 +21,15 @@ module mod_tracking
 
   integer :: NDRFT         ! Number of particles being tracked
 
-  integer :: SIM_TIME      ! Curent simulation time (s)
-  integer :: SIM_END       ! Durration of the simulation (s)
+  integer :: SIM_TIME      ! Current simulation time (s)
+  integer :: SIM_END       ! Duration of the simulation (s)
   real    :: SIM_START_MJD ! Simulation real-time start date (mjd)
   !==============================================================================|
 contains
 
   subroutine init_tracking
     !==============================================================================|
-    !  Read in lagrangian control parameters and initial lagrangian positions      |
+    !  Read in Lagrangian control parameters and initial Lagrangian positions      |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
@@ -42,10 +42,10 @@ contains
     call random_seed()
 
     !------------------------------------------------------------------------------|
-    !  Read initial partical positions from the seed file                          |
+    !  Read initial particle positions from the seed file                          |
     !------------------------------------------------------------------------------|
     call read_seed()
-    call nc_new_outfile(OUTFN, NDRFT, LAG_ID)
+    call nc_new_outfile(OUTFN, NDRFT, LAG_ID, GRIDFN)
 
     !------------------------------------------------------------------------------|
     !  Find particle tracking simulated end time                                   |
@@ -61,7 +61,7 @@ contains
     !------------------------------------------------------------------------------|
     !  Print statistics on lagrangian tracking to output                           |
     !------------------------------------------------------------------------------|
-    write(*,*) "-- Lagrangian Tracking Informaion --"
+    write(*,*) "-- Lagrangian Tracking Information --"
     write(*,*) "# Particles to track   : ", NDRFT
     write(*,*) "# Sim. start time (mjd): ", SIM_START_MJD
     write(*,*) "# Sim. end time (mjd)  : ", end_time_mjd
@@ -147,7 +147,7 @@ contains
 
   subroutine read_seed
     !==============================================================================|
-    !  Read the initial partical positions from the input file                     |
+    !  Read the initial particle positions from the input file                     |
     !==============================================================================|
     !   VARIABLE       | TYPE | DESCRIPTION                                        |
     !  ----------------|------|--------------------------------                    |
@@ -166,7 +166,7 @@ contains
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
-    !  Retrive the number of particles in the tracking simulation                  |
+    !  Retrieve the number of particles in the tracking simulation                 |
     !------------------------------------------------------------------------------|
     call nc_open_file(SEEDFN, .false., fileid)
     call nc_dim(fileid, "number", NDRFT)

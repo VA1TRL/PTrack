@@ -61,7 +61,7 @@ contains
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine nc_new_outfile(filepath, npoint, points)
+  subroutine nc_new_outfile(filepath, npoint, points, gridpath)
     !==============================================================================|
     !  Create a new NetCDF file to recieve the simulation output                   |
     !==============================================================================|
@@ -70,9 +70,10 @@ contains
     character(len=*),           intent(in) :: filepath
     integer,                    intent(in) :: npoint
     integer, dimension(npoint), intent(in) :: points
+    character(len=*),           intent(in) :: gridpath
     !------------------------------------------------------------------------------|
     integer :: ierr
-    integer :: fid
+    integer :: fid, gfid
     integer :: timeid, numid, numvarid, id
     !==============================================================================|
 
@@ -121,6 +122,26 @@ contains
     ierr = nf90_put_att(fid, id, "units", "meters")
     call handle_ncerror(ierr)
     ierr = nf90_put_att(fid, id, "positive", "down")
+    call handle_ncerror(ierr)
+
+    ierr = nf90_def_var(fid, "lon", NF90_FLOAT, [numid,timeid], id)
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "standard_name", "longitude")
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "units", "degrees_east")
+    call handle_ncerror(ierr)
+
+    ierr = nf90_def_var(fid, "lat", NF90_FLOAT, [numid,timeid], id)
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "standard_name", "latitude")
+    call handle_ncerror(ierr)
+    ierr = nf90_put_att(fid, id, "units", "degrees_north")
+    call handle_ncerror(ierr)
+
+    call nc_open_file(gridpath, .false., gfid)
+    ierr = nf90_copy_att(gfid, NF90_GLOBAL, "CoordinateProjection", fid, NF90_GLOBAL)
+    call handle_ncerror(ierr)
+    ierr = nf90_close(gfid)
     call handle_ncerror(ierr)
 
     ierr = nf90_enddef(fid)
