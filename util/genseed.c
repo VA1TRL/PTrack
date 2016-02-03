@@ -11,6 +11,8 @@
  *                                                                            *
  * The -t option tells the program to read start and start dates formatted    *
  * as "dd/mm/yyyy hh:mm:ss" instead of a Modified Julian Date.                *
+ *                                                                            *
+ * Author: Tristan.Losier@unb.ca                                              *
  ******************************************************************************/
 #include <stdio.h>
 #include <string.h>
@@ -80,10 +82,6 @@ int main(int argc, char ** argv)
     }
     if (inFile == NULL) {
         printf("Input file not provided!\n%s\n", USAGE_STRING);
-        exit(EXIT_FAILURE);
-    }
-    if (proj == NULL) {
-        printf("Projection not provided!\n%s\n", USAGE_STRING);
         exit(EXIT_FAILURE);
     }
     if (outFile == NULL) {
