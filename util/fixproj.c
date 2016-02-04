@@ -19,7 +19,7 @@
 #include <netcdf.h>
 #include <proj_api.h>
 
-#define USAGE_STRING "Command usage:\n    fixcart [-p projection] [-i] [-v lon lat x y] file_to_process.nc"
+#define USAGE_STRING "Command usage:\n    fixproj [-p projection] [-i] [-v lon lat x y] file_to_process.nc"
 #define PROJ_ATT_NAME "CoordinateProjection"
 
 #define ARG_PROJ 'p'

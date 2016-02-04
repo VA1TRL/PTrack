@@ -19,7 +19,7 @@
 #include <proj_api.h>
 #include <netcdf.h>
 
-#define USAGE_STRING "Command usage:\n    genseed [-o outfile.nc] [-t] -p projection particle_release.dat"
+#define USAGE_STRING "Command usage:\n    genseed [-o outfile.nc] [-t] [-p projection] particle_release.dat"
 
 #define ARG_PROJ 'p'
 #define ARG_OUT  'o'
@@ -144,7 +144,20 @@ float mjd(int day, int month, int year, int hour, int minute, int second)
     return (float)(jd - 2400000.5);
 }
 
-// Read the specified particle seeding .dat file into a linked-list of point objects
+/* Read the specified particle seeding .dat file into a linked-list of point objects.
+ * The .dat file should contain one particle record per line, with the parameters describing
+ * the particle separated by one or more spaces. The order and meaning of the parameters
+ * that make up the particle record are detailed in the following table.
+ *
+ *  Column | Name           | Type  | Units                      | Description
+ *  ------ | -------------- | ----- | -------------------------- | -----------
+ *  1      | ID             | int   | none                       | Arbitrary identifier
+ *  2      | X              | float | meters or degrees_east     | Domain x coordinate
+ *  3      | Y              | float | meters or degrees_north    | Domain y coordinate
+ *  4      | Z              | float | meters                     | Downward positive particle depth
+ *  5      | Release Time   | float | MJD or yyyy-mm-dd hh:mm:ss | Time to release particle into the simulation
+ *  6      | Track End Time | float | MJD or yyyy-mm-dd hh:mm:ss | Time to remove particle from the simulation
+ */
 point * read_file(const char * file, int dmy_fmt)
 {
     FILE * fp = fopen(file, "r");
@@ -165,9 +178,9 @@ point * read_file(const char * file, int dmy_fmt)
             fscanf(fp, "%f %f", &cur->start, &cur->end);
         } else {
             int d, m, y, h, mm, s;
-            fscanf(fp, "%d/%d/%d %d:%d:%d", &d, &m, &y, &h, &mm, &s);
+            fscanf(fp, "%d-%d-%d %d:%d:%d", &y, &m, &d, &h, &mm, &s);
             cur->start = mjd(d, m, y, h, mm, s);
-            fscanf(fp, "%d/%d/%d %d:%d:%d", &d, &m, &y, &h, &mm, &s);
+            fscanf(fp, "%d-%d-%d %d:%d:%d", &y, &m, &d, &h, &mm, &s);
             cur->end = mjd(d, m, y, h, mm, s);
         }
 
