@@ -40,7 +40,7 @@ contains
     if (iscan /= 0) then
       write(*,*) "ERROR reading DTI from: ", CASENAME
       call pscanmsg(iscan)
-      stop 
+      stop
     end if
 
     !------------------------------------------------------------------------------|
@@ -50,7 +50,7 @@ contains
     if (iscan /= 0) then
       write(*,*) "ERROR reading DTOUT from: ", CASENAME
       call pscanmsg(iscan)
-      stop 
+      stop
     end if
 
     !------------------------------------------------------------------------------|
@@ -58,9 +58,7 @@ contains
     !------------------------------------------------------------------------------|
     iscan = scan_file(CASENAME, "F_DEPTH", lval = F_DEPTH)
     if (iscan /= 0) then
-      write(*,*) "ERROR reading F_DEPTH from: ", CASENAME
-      call pscanmsg(iscan)
-      stop 
+      F_DEPTH = .false.
     end if
 
     !------------------------------------------------------------------------------|
@@ -68,9 +66,7 @@ contains
     !------------------------------------------------------------------------------|
     iscan = scan_file(CASENAME, "P_REL_B", lval = P_REL_B)
     if (iscan /= 0) then
-      write(*,*) "ERROR reading P_REL_B from: ", CASENAME
-      call pscanmsg(iscan)
-      stop 
+      P_REL_B = .false.
     end if
 
     !------------------------------------------------------------------------------|
@@ -78,9 +74,7 @@ contains
     !------------------------------------------------------------------------------|
     iscan = scan_file(CASENAME, "OUT_SIGMA", lval = OUT_SIGMA)
     if (iscan /= 0) then
-      write(*,*) "ERROR reading OUT_SIGMA from: ", CASENAME
-      call pscanmsg(iscan)
-      stop 
+      OUT_SIGMA = .false.
     end if
 
     !------------------------------------------------------------------------------|
@@ -88,9 +82,7 @@ contains
     !------------------------------------------------------------------------------|
     iscan = scan_file(CASENAME, "P_RND_WALK", lval = P_RND_WALK)
     if (iscan /= 0) then
-      write(*,*) "ERROR reading P_RND_WALK from: ", CASENAME
-      call pscanmsg(iscan)
-      stop 
+      P_RND_WALK = .false.
     end if
 
     !------------------------------------------------------------------------------|
@@ -100,7 +92,7 @@ contains
     if (iscan /= 0) then
       write(*,*) "ERROR reading GRIDFN from: ", CASENAME
       call pscanmsg(iscan)
-      stop 
+      stop
     end if
 
     !------------------------------------------------------------------------------|
@@ -110,7 +102,7 @@ contains
     if (iscan /= 0) then
       write(*,*) "ERROR reading OUTFN from: ", CASENAME
       call pscanmsg(iscan)
-      stop 
+      stop
     end if
 
     !------------------------------------------------------------------------------|
@@ -120,7 +112,7 @@ contains
     if (iscan /= 0) then
       write(*,*) "ERROR reading SEEDFN from: ", CASENAME
       call pscanmsg(iscan)
-      stop 
+      stop
     end if
 
     if (P_RND_WALK) then
@@ -131,7 +123,7 @@ contains
       if (iscan /= 0) then
         write(*,*) "ERROR reading K_XY: ", CASENAME
         call pscanmsg(iscan)
-        stop 
+        stop
       end if
 
       !------------------------------------------------------------------------------|
@@ -141,7 +133,7 @@ contains
       if (iscan /= 0) then
         write(*,*) "ERROR reading K_Z from: ", CASENAME
         call pscanmsg(iscan)
-        stop 
+        stop
       end if
     end if
   end subroutine init_model

@@ -22,9 +22,9 @@ program particle_traj
   !------------------------------------------------------------------------------|
   call getarg(1,CASENAME)
 
-  inquire(file=CASENAME,exist=fexist)
-  if(.not.fexist)then
-    write(*,*) 'ERROR: Parameter file: ',CASENAME,' does not exist'
+  inquire(file=CASENAME, exist=fexist)
+  if (.not.fexist) then
+    write(*,*) 'ERROR: Parameter file: ', CASENAME, ' does not exist'
     stop
   end if
 
@@ -40,9 +40,16 @@ program particle_traj
   call init_flow_field
 
   write(*,*) "-- Domain Information --"
-  write(*,*) "# Nodes               : ",NODES
-  write(*,*) "# Elements            : ",ELEMENTS
-  write(*,*) "# Sigma layers        : ",SIGLAY
+  write(*,*) "Nodes       : ", NODES
+  write(*,*) "Elements    : ", ELEMENTS
+  write(*,*) "Sigma layers: ", SIGLAY
+  write(*,*) "-- Simulation Parameters --"
+  write(*,*) "Fixed particle depth  : ", F_DEPTH
+  write(*,*) "Random walk model     : ", P_RND_WALK
+  if (P_RND_WALK) then
+    write(*,*) "Horizontal diffusivity: ", K_XY
+    write(*,*) "Vertical diffusivity  : ", K_Z
+  end if
 
   !------------------------------------------------------------------------------|
   !  Run the Lagrangian particle tracking model                                  |

@@ -62,10 +62,11 @@ contains
     !  Print statistics on lagrangian tracking to output                           |
     !------------------------------------------------------------------------------|
     write(*,*) "-- Lagrangian Tracking Information --"
-    write(*,*) "# Particles to track   : ", NDRFT
-    write(*,*) "# Sim. start time (mjd): ", SIM_START_MJD
-    write(*,*) "# Sim. end time (mjd)  : ", end_time_mjd
-    write(*,*) "# Time step (s)        : ", DTI
+    write(*,*) "Particles to track   : ", NDRFT
+    write(*,*) "Sim. start time (mjd): ", SIM_START_MJD
+    write(*,*) "Sim. end time (mjd)  : ", end_time_mjd
+    write(*,*) "Time step (s)        : ", DTI
+    write(*,*) "Output time step (s) : ", DTOUT
   end subroutine init_tracking
 
   !==============================================================================|
