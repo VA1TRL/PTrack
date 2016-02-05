@@ -111,7 +111,7 @@ contains
     !  Loop over the tracking period                                               |
     !------------------------------------------------------------------------------|
     do
-      if (SIM_TIME > SIM_END) exit
+      if (SIM_TIME >= SIM_END) exit
       SIM_TIME = SIM_TIME + DTI
 
       !------------------------------------------------------------------------------|
