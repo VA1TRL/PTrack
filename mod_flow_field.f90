@@ -91,10 +91,15 @@ contains
     allocate(AWX(ELEMENTS,3), AWY(ELEMENTS,3))
     allocate(NV(ELEMENTS,3), NBE(ELEMENTS,3))
     allocate(NTVE(NODES), NBVE(NODES,maxelem))
-    allocate(U_START(ELEMENTS,SIGLAY), U_END(ELEMENTS,SIGLAY))
-    allocate(V_START(ELEMENTS,SIGLAY), V_END(ELEMENTS,SIGLAY))
-    allocate(W_START(ELEMENTS,SIGLAY), W_END(ELEMENTS,SIGLAY))
-    allocate(EL_START(NODES), EL_END(NODES))
+    if (P_2D_MODEL) then
+      allocate(U_START(ELEMENTS,1), U_END(ELEMENTS,1))
+      allocate(V_START(ELEMENTS,1), V_END(ELEMENTS,1))
+    else
+      allocate(U_START(ELEMENTS,SIGLAY), U_END(ELEMENTS,SIGLAY))
+      allocate(V_START(ELEMENTS,SIGLAY), V_END(ELEMENTS,SIGLAY))
+      allocate(W_START(ELEMENTS,SIGLAY), W_END(ELEMENTS,SIGLAY))
+      allocate(EL_START(NODES), EL_END(NODES))
+    end if
 
     !------------------------------------------------------------------------------|
     !  Initialize grid information arrays                                          |
@@ -163,16 +168,17 @@ contains
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine get_flow_at(u, v, w, el, time)
+  subroutine get_flow_at(time, u, v, w, el)
     !==============================================================================|
     !  Get the flow field corrosponding to the provided time (MJD format) by       |
     !  interpolating between the time-adjacent NetCDF records.                     |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    real(DP), dimension(ELEMENTS,SIGLAY), intent(out) :: u, v, w
-    real(DP), dimension(NODES),           intent(out) :: el
-    real,                                 intent(in)  :: time
+    real,                               intent(in)  :: time
+    real(DP), dimension(:,:),           intent(out) :: u, v
+    real(DP), dimension(:,:), optional, intent(out) :: w
+    real(DP), dimension(:),   optional, intent(out) :: el
     !------------------------------------------------------------------------------|
     real :: frac_start, frac_end
     !==============================================================================|
@@ -180,11 +186,16 @@ contains
     !------------------------------------------------------------------------------|
     !  Initialize flow field data on the first run of this subroutine              |
     !------------------------------------------------------------------------------|
-    if (NC_RECORD < 0) then
+    if (NC_RECORD < 0.and.present(w).and.present(el)) then
       NC_RECORD = timeIndex(time)
-      call read_flow(U_START, V_START, W_START, EL_START, T_START, NC_RECORD)
+      call read_flow(NC_RECORD, T_START, U_START, V_START, W_START, EL_START)
       NC_RECORD = NC_RECORD + 1
-      call read_flow(U_END, V_END, W_END, EL_END, T_END, NC_RECORD)
+      call read_flow(NC_RECORD, T_END, U_END, V_END, W_END, EL_END)
+    else if (NC_RECORD < 0) then
+      NC_RECORD = timeIndex(time)
+      call read_flow(NC_RECORD, T_START, U_START, V_START)
+      NC_RECORD = NC_RECORD + 1
+      call read_flow(NC_RECORD, T_END, U_END, V_END)
     end if
 
     !------------------------------------------------------------------------------|
@@ -195,12 +206,18 @@ contains
 
       U_START   = U_END
       V_START   = V_END
-      W_START   = W_END
-      EL_START  = EL_END
+      if (.not.P_2D_MODEL) then
+        W_START   = W_END
+        EL_START  = EL_END
+      end if
       T_START   = T_END
       NC_RECORD = NC_RECORD + 1
 
-      call read_flow(U_END, V_END, W_END, EL_END, T_END, NC_RECORD)
+      if (P_2D_MODEL) then
+        call read_flow(NC_RECORD, T_END, U_END, V_END)
+      else
+        call read_flow(NC_RECORD, T_END, U_END, V_END, W_END, EL_END)
+      end if
     end if
 
     !------------------------------------------------------------------------------|
@@ -208,28 +225,32 @@ contains
     !------------------------------------------------------------------------------|
     frac_start = (T_END - time)/(T_END - T_START)
     frac_end   = (time - T_START)/(T_END - T_START)
-    u  = frac_start*U_START  + frac_end*U_END
-    v  = frac_start*V_START  + frac_end*V_END
-    w  = frac_start*W_START  + frac_end*W_END
-    el = frac_start*EL_START + frac_end*EL_END
+    u = frac_start*U_START + frac_end*U_END
+    v = frac_start*V_START + frac_end*V_END
+    if (present(w).and.present(el)) then
+      w  = frac_start*W_START  + frac_end*W_END
+      el = frac_start*EL_START + frac_end*EL_END
+    end if
   end subroutine get_flow_at
 
   !==============================================================================|
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
   !==============================================================================|
 
-  subroutine read_flow(u, v, w, el, time, n)
+  subroutine read_flow(n, time, u, v, w, el)
     !==============================================================================|
     !  Read flow field vectors from NetCDF file                                    |
     !==============================================================================|
     implicit none
     !------------------------------------------------------------------------------|
-    real, dimension(ELEMENTS,SIGLAY), intent(out) :: u, v, w
-    real, dimension(NODES),           intent(out) :: el
-    real,                             intent(out) :: time
-    integer,                          intent(in)  :: n
+    integer,                        intent(in)  :: n
+    real,                           intent(out) :: time
+    real, dimension(:,:),           intent(out) :: u, v
+    real, dimension(:,:), optional, intent(out) :: w
+    real, dimension(:),   optional, intent(out) :: el
     !------------------------------------------------------------------------------|
-    integer :: fileid
+    integer                         :: fileid
+    real, dimension(:), allocatable :: ua, va
     !==============================================================================|
 
     !------------------------------------------------------------------------------|
@@ -241,10 +262,18 @@ contains
     !  Read flow field data from NetCDF file at specified time index               |
     !------------------------------------------------------------------------------|
     call nc_1d_read(fileid, "time", n, time)
-    call nc_2d_read(fileid, "zeta", n, NODES,    el)
-    call nc_3d_read(fileid, "u",    n, ELEMENTS, SIGLAY, u)
-    call nc_3d_read(fileid, "v",    n, ELEMENTS, SIGLAY, v)
-    call nc_3d_read(fileid, "ww",   n, ELEMENTS, SIGLAY, w)
+    if (present(el)) call nc_2d_read(fileid, "zeta", n, NODES, el)
+    if (present(w)) then
+      call nc_3d_read(fileid, "u",  n, ELEMENTS, SIGLAY, u)
+      call nc_3d_read(fileid, "v",  n, ELEMENTS, SIGLAY, v)
+      call nc_3d_read(fileid, "ww", n, ELEMENTS, SIGLAY, w)
+    else
+      allocate(ua(ELEMENTS), va(ELEMENTS))
+      call nc_2d_read(fileid, "ua",  n, ELEMENTS, ua)
+      call nc_2d_read(fileid, "va",  n, ELEMENTS, va)
+      u = reshape(ua, [ELEMENTS, 1])
+      v = reshape(va, [ELEMENTS, 1])
+    end if
 
     !------------------------------------------------------------------------------|
     !  Close file                                                                  |

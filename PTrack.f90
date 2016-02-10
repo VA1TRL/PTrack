@@ -55,7 +55,11 @@ program particle_traj
   !  Run the Lagrangian particle tracking model                                  |
   !------------------------------------------------------------------------------|
   call init_tracking
-  call run_tracking
+  if (P_2D_MODEL) then
+    call run_2d_tracking
+  else
+    call run_tracking
+  end if
 
   close(0)
 end program particle_traj

@@ -1,4 +1,4 @@
-subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
+subroutine traject(time, u1, u2, v1, v2, w1, w2, el1, el2)
   !==============================================================================|
   !  Approximate particle postition from (x0,y0,z0) to (xn,yn,zn) using the      |
   !  4-stage Runge-Kutta itteritave method.                                      |
@@ -8,10 +8,11 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   !  el1, el2:   Free surface elevation                                          |
   !==============================================================================|
   use mod_config
-  use mod_tracking
+  use mod_tracking_data
   use mod_flow_field
   implicit none
   !------------------------------------------------------------------------------|
+  integer,                              intent(in) :: time
   real(DP), dimension(ELEMENTS,SIGLAY), intent(in) :: u1, u2
   real(DP), dimension(ELEMENTS,SIGLAY), intent(in) :: v1, v2
   real(DP), dimension(ELEMENTS,SIGLAY), intent(in) :: w1, w2
@@ -41,8 +42,8 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   !------------------------------------------------------------------------------|
   nactive = 0
   do i = 1,NDRFT
-    if (LAG_INDOMAIN(i) .and. LAG_START(i) <= SIM_TIME .and. LAG_STOP(i) > SIM_TIME) then
-      nactive = nactive + 1
+    if (LAG_INDOMAIN(i).and.LAG_START(i) <= time.and.LAG_STOP(i) > time) then
+      nactive     = nactive + 1
       ai(nactive) = i
     end if
   end do
@@ -115,12 +116,12 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
 
     if (F_DEPTH) where (z < -1.0_dp) indomain = .false.
     where (z < -1.0) z = -2.0_dp - z ! Reflect off bottom
-    where (z > 0.0) z = 0.0_dp ! Can't move above water surface
+    where (z > 0.0)  z = 0.0_dp      ! Can't move above water surface
 
     !------------------------------------------------------------------------------|
     !  Evaluate velocity (u,v,w) at stage ns particle position                     |
     !------------------------------------------------------------------------------|
-    call interp_v(nactive, host, x, y, z, u, v, w, vx(:,ns),vy(:,ns),vz(:,ns))
+    call interp_v(nactive, host, x, y, z, u, v, w, vx(:,ns), vy(:,ns), vz(:,ns))
   end do
 
   !------------------------------------------------------------------------------|
@@ -129,6 +130,7 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
   x = x0
   y = y0
   z = 0.0_dp
+
   do ns = 1,mstage
     x = x + float(DTI)*vx(:,ns)*b_rk(ns)
     y = y + float(DTI)*vy(:,ns)*b_rk(ns)
@@ -151,7 +153,7 @@ subroutine traject(u1,u2,v1,v2,w1,w2,el1,el2)
 
   if (F_DEPTH) where (z < -1.0) indomain = .false.
   where (z < -1.0) z = -2.0_dp - z ! Reflect off bottom
-  where (z > 0.0) z = 0.0_dp ! Can't move above water surface
+  where (z > 0.0)  z = 0.0_dp      ! Can't move above water surface
 
   !------------------------------------------------------------------------------|
   !  Update particle tracking data arrays                                        |
@@ -169,14 +171,139 @@ end subroutine traject
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
 !==============================================================================|
 
-subroutine random_walk(ell)
+subroutine traject_2d(time, u1, u2, v1, v2)
+  !==============================================================================|
+  !  Approximate particle postition from (x0,y0) to (xn,yn) using the            |
+  !  4-stage Runge-Kutta itteritave method.                                      |
+  !------------------------------------------------------------------------------|
+  !  u1, v1: Velocity field at time T0                                           |
+  !  u2, v2: Velocity field at time T0 + DTI                                     |
+  !==============================================================================|
+  use mod_config
+  use mod_tracking_data
+  use mod_flow_field
+  implicit none
+  !------------------------------------------------------------------------------|
+  integer,                       intent(in) :: time
+  real(DP), dimension(ELEMENTS), intent(in) :: u1, u2
+  real(DP), dimension(ELEMENTS), intent(in) :: v1, v2
+  !------------------------------------------------------------------------------|
+  integer                               :: i, nactive
+  integer                               :: ns
+  integer,  dimension(NDRFT)            :: ai
+  real(DP), dimension(ELEMENTS)         :: u, v
+  real(DP), dimension(:),   allocatable :: x0, y0
+  real(DP), dimension(:),   allocatable :: x, y
+  real(DP), dimension(:,:), allocatable :: vx, vy
+  integer,  dimension(:),   allocatable :: host
+  logical,  dimension(:),   allocatable :: indomain
+  !------------------------------------------------------------------------------|
+  integer, parameter                    :: mstage = 4
+  real,    parameter, dimension(mstage) :: a_rk = [0.0, 0.5, 0.5, 1.0]
+  real,    parameter, dimension(mstage) :: b_rk = [1.0/6.0, 1.0/3.0, 1.0/3.0, 1.0/6.0]
+  real,    parameter, dimension(mstage) :: c_rk = [0.0, 0.5, 0.5, 1.0]
+  !==============================================================================|
+
+  !------------------------------------------------------------------------------|
+  !  Select active particles                                                     |
+  !------------------------------------------------------------------------------|
+  nactive = 0
+  do i = 1,NDRFT
+    if (LAG_INDOMAIN(i).and.LAG_START(i) <= time.and.LAG_STOP(i) > time) then
+      nactive     = nactive + 1
+      ai(nactive) = i
+    end if
+  end do
+
+  !------------------------------------------------------------------------------|
+  !  Allocate working memory                                                     |
+  !------------------------------------------------------------------------------|
+  allocate(x0(nactive), y0(nactive))
+  allocate(x(nactive), y(nactive))
+  allocate(host(nactive), indomain(nactive))
+  allocate(vx(nactive,0:mstage))
+  allocate(vy(nactive,0:mstage))
+
+  !------------------------------------------------------------------------------|
+  !  Initialize stage variables                                                  |
+  !------------------------------------------------------------------------------|
+  vx(:,0) = 0.0_dp
+  vy(:,0) = 0.0_dp
+
+  do i = 1,nactive
+    x0(i)   = LAG_XP(ai(i))
+    y0(i)   = LAG_YP(ai(i))
+    host(i) = LAG_HOST(ai(i))
+  end do
+  indomain = .true.
+
+  !------------------------------------------------------------------------------|
+  !  Loop over RK Stages                                                         |
+  !------------------------------------------------------------------------------|
+  do ns = 1,mstage
+
+    !------------------------------------------------------------------------------|
+    !  Particle position at stage N                                                |
+    !------------------------------------------------------------------------------|
+    x = x0 + a_rk(ns)*float(DTI)*vx(:,ns - 1)
+    y = y0 + a_rk(ns)*float(DTI)*vy(:,ns - 1)
+
+    do i = 1,nactive
+      call fhe(x(i), y(i), host(i), indomain(i))
+    end do
+
+    !------------------------------------------------------------------------------|
+    !  Calculate velocity field for stage N using c_rk coefficients                |
+    !------------------------------------------------------------------------------|
+    u = (1.0 - c_rk(ns))*u1 + c_rk(ns)*u2
+    v = (1.0 - c_rk(ns))*v1 + c_rk(ns)*v2
+
+    !------------------------------------------------------------------------------|
+    !  Evaluate velocity (u,v,w) at stage ns particle position                     |
+    !------------------------------------------------------------------------------|
+    call interp_2d_v(nactive, host, x, y, u, v, vx(:,ns), vy(:,ns))
+  end do
+
+  !------------------------------------------------------------------------------|
+  !  Sum stage contributions to get updated particle positions                   |
+  !------------------------------------------------------------------------------|
+  x = x0
+  y = y0
+
+  do ns = 1,mstage
+    x = x + float(DTI)*vx(:,ns)*b_rk(ns)
+    y = y + float(DTI)*vy(:,ns)*b_rk(ns)
+  end do
+
+  do i = 1,nactive
+    call fhe(x(i), y(i), host(i), indomain(i))
+  end do
+
+  !------------------------------------------------------------------------------|
+  !  Update particle tracking data arrays                                        |
+  !------------------------------------------------------------------------------|
+  do i = 1,nactive
+    LAG_XP(ai(i))       = x(i)
+    LAG_YP(ai(i))       = y(i)
+    LAG_HOST(ai(i))     = host(i)
+    LAG_INDOMAIN(ai(i)) = indomain(i)
+  end do
+end subroutine traject_2d
+
+!==============================================================================|
+!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
+!==============================================================================|
+
+subroutine random_walk(time, ell)
   !==============================================================================|
   !  Apply the random walk algoritham to the currently active particles          |
   !==============================================================================|
-  use mod_tracking
+  use mod_tracking_data
+  use mod_flow_field
   implicit none
   !------------------------------------------------------------------------------|
-  real(DP), dimension(NODES), intent(in) :: ell
+  integer,                              intent(in) :: time
+  real(DP), dimension(NODES), optional, intent(in) :: ell
   !------------------------------------------------------------------------------|
   integer                               :: i, nactive
   integer,  dimension(NDRFT)            :: ai
@@ -195,8 +322,8 @@ subroutine random_walk(ell)
   !------------------------------------------------------------------------------|
   nactive = 0
   do i = 1,NDRFT
-    if (LAG_INDOMAIN(i) .and. LAG_START(i) <= SIM_TIME .and. LAG_STOP(i) > SIM_TIME) then
-      nactive = nactive + 1
+    if (LAG_INDOMAIN(i).and.LAG_START(i) <= time.and.LAG_STOP(i) > time) then
+      nactive     = nactive + 1
       ai(nactive) = i
     end if
   end do
@@ -204,28 +331,33 @@ subroutine random_walk(ell)
   !------------------------------------------------------------------------------|
   !  Allocate working memory                                                     |
   !------------------------------------------------------------------------------|
-  allocate(x(nactive), y(nactive), z(nactive))
-  allocate(dzm(nactive))
+  allocate(x(nactive), y(nactive))
   allocate(host(nactive), indomain(nactive))
-  allocate(hp(nactive), elp(nactive))
-  allocate(rnd(nactive,3))
-  allocate(rnd_vect(nactive*3))
-  if (F_DEPTH) allocate(depth(nactive))
+  if (P_2D_MODEL) then
+    allocate(rnd(nactive,2))
+    allocate(rnd_vect(nactive*2))
+  else
+    if (F_DEPTH) allocate(depth(nactive))
+    allocate(z(nactive), dzm(nactive))
+    allocate(hp(nactive), elp(nactive))
+    allocate(rnd(nactive,3))
+    allocate(rnd_vect(nactive*3))
+  end if
 
   !------------------------------------------------------------------------------|
   !  Initalize working memory                                                    |
   !------------------------------------------------------------------------------|
   do i = 1,nactive
-    x(i)   = LAG_XP(ai(i))
-    y(i)   = LAG_YP(ai(i))
-    z(i)   = LAG_ZP(ai(i))
+    x(i)    = LAG_XP(ai(i))
+    y(i)    = LAG_YP(ai(i))
     host(i) = LAG_HOST(ai(i))
-    if (F_DEPTH) depth(i) = LAG_D(ai(i))
+    if (F_DEPTH)     depth(i) = LAG_D(ai(i))
+    if (.not.P_2D_MODEL) z(i) = LAG_ZP(ai(i))
   end do
   indomain = .true.
 
-  if (F_DEPTH) then
-    call interp_elh(nactive,host,x,y,ell,hp,elp)
+  if (present(ell).and.F_DEPTH) then
+    call interp_elh(nactive, host, x, y, ell, hp, elp)
     z = 0.0_dp - depth/(hp + elp)
   end if
 
@@ -237,25 +369,27 @@ subroutine random_walk(ell)
   rnd = reshape(rnd_vect, [size(rnd, 1), size(rnd, 2)])
   x = x + rnd(:,1)*((float(DTI)*2*K_XY)**0.5)
   y = y + rnd(:,2)*((float(DTI)*2*K_XY)**0.5)
-  dzm =   rnd(:,3)*((float(DTI)*2*K_Z)**0.5)
+  if (.not.P_2D_MODEL) dzm = rnd(:,3)*((float(DTI)*2*K_Z)**0.5)
 
   do i = 1,nactive
-    call fhe(x(i),y(i),host(i),indomain(i))
+    call fhe(x(i), y(i), host(i), indomain(i))
   end do
 
   !------------------------------------------------------------------------------|
   !  Convert the particle's new z position to sigma depth                        |
   !------------------------------------------------------------------------------|
-  call interp_elh(nactive,host,x,y,ell,hp,elp)
-  if (F_DEPTH) then
-    z = 0.0_dp - depth/(hp + elp)
-  else
-    z = z + dzm/(hp + elp)
-  end if
+  if (present(ell).and..not.P_2D_MODEL) then
+    call interp_elh(nactive, host, x, y, ell, hp, elp)
+    if (F_DEPTH) then
+      z = 0.0_dp - depth/(hp + elp)
+    else
+      z = z + dzm/(hp + elp)
+    end if
 
-  if (F_DEPTH) where (z < -1.0) indomain = .false.
-  where (z < -1.0) z = -2.0_dp - z ! Reflect off bottom
-  where (z > 0.0) z = 0.0_dp ! Can't move above water surface
+    if (F_DEPTH) where (z < -1.0) indomain = .false.
+    where (z < -1.0) z = -2.0_dp - z ! Reflect off bottom
+    where (z > 0.0)  z = 0.0_dp      ! Can't move above water surface
+  end if
 
   !------------------------------------------------------------------------------|
   !  Update particle tracking data arrays                                        |
@@ -263,9 +397,9 @@ subroutine random_walk(ell)
   do i = 1,nactive
     LAG_XP(ai(i))       = x(i)
     LAG_YP(ai(i))       = y(i)
-    LAG_ZP(ai(i))       = z(i)
     LAG_HOST(ai(i))     = host(i)
     LAG_INDOMAIN(ai(i)) = indomain(i)
+    if (.not.P_2D_MODEL) LAG_ZP(ai(i)) = z(i)
   end do
 end subroutine random_walk
 
@@ -273,7 +407,7 @@ end subroutine random_walk
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
 !==============================================================================|
 
-subroutine interp_v(np,host,x,y,z,uin,vin,win,u,v,w) 
+subroutine interp_v(np, host, x, y, z, uin, vin, win, u, v, w) 
   !==============================================================================|
   !  Give a point (x,y,z), obtain a linear interpolation                         |
   !  of the provided velocity field at the point                                 |
@@ -320,8 +454,8 @@ subroutine interp_v(np,host,x,y,z,uin,vin,win,u,v,w)
       zf1 = 1.0_dp 
       zf2 = 0.0_dp
     else if(z(j) < Z_LEV(SIGLEV-1)) then ! Particle near bottom
-      k1 = SIGLAY
-      k2 = SIGLAY
+      k1  = SIGLAY
+      k2  = SIGLAY
       zf1 = 1.0_dp
       zf2 = 0.0_dp
     else
@@ -378,11 +512,51 @@ subroutine interp_v(np,host,x,y,z,uin,vin,win,u,v,w)
   end do
 end subroutine interp_v
 
+subroutine interp_2d_v(np, host, x, y, uin, vin, u, v) 
+  !==============================================================================|
+  !  Give a point (x,y), obtain a linear interpolation of the provided velocity  |
+  !  field at the point                                                          |
+  !                                                                              |
+  !  RETURN:                                                                     |
+  !     u,v (velocity field at x,y)                                              |
+  !==============================================================================|
+  use mod_flow_field
+  implicit none
+  !------------------------------------------------------------------------------|
+  integer,                       intent(in)  :: np
+  integer,  dimension(np),       intent(in)  :: host
+  real(DP), dimension(ELEMENTS), intent(in)  :: uin, vin
+  real(DP), dimension(np),       intent(in)  :: x, y
+  real(DP), dimension(np),       intent(out) :: u, v
+  !------------------------------------------------------------------------------|
+  integer,  dimension(np) :: e1, e2, e3, i
+  real(DP), dimension(np) :: x0c, y0c
+  real(DP), dimension(np) :: dudx, dudy, dvdx, dvdy
+  !==============================================================================|
+
+  i   = host
+  e1  = NBE(host,1)
+  e2  = NBE(host,2)
+  e3  = NBE(host,3)
+  x0c = x - XC(host)
+  y0c = y - YC(host)
+
+  !------------------------------------------------------------------------------|
+  !  Linear interpolation of particle velocity                                   |
+  !------------------------------------------------------------------------------|
+  dudx = A1U(i,1)*uin(i) + A1U(i,2)*uin(e1) + A1U(i,3)*uin(e2) + A1U(i,4)*uin(e3)
+  dudy = A2U(i,1)*uin(i) + A2U(i,2)*uin(e1) + A2U(i,3)*uin(e2) + A2U(i,4)*uin(e3)
+  dvdx = A1U(i,1)*vin(i) + A1U(i,2)*vin(e1) + A1U(i,3)*vin(e2) + A1U(i,4)*vin(e3)
+  dvdy = A2U(i,1)*vin(i) + A2U(i,2)*vin(e1) + A2U(i,3)*vin(e2) + A2U(i,4)*vin(e3)
+  u = uin(i) + dudx*x0c + dudy*y0c
+  v = vin(i) + dvdx*x0c + dvdy*y0c
+end subroutine interp_2d_v
+
 !==============================================================================|
 !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%|
 !==============================================================================|
 
-subroutine interp_elh(np,host,x,y,el,hp,elp)
+subroutine interp_elh(np, host, x, y, el, hp, elp)
   !==============================================================================|
   !  Given a point (x,y), obtain a linear interpolation                          |
   !  of the provided free surface/bathymetry (hin,ein) at the point              |
@@ -425,9 +599,10 @@ subroutine interp_elh(np,host,x,y,el,hp,elp)
   !------------------------------------------------------------------------------|
   !  Linear interpolation of free surface height                                 |
   !------------------------------------------------------------------------------|
-  e0 = AW0(host,1)*el(n1) + AW0(host,2)*el(n2) + AW0(host,3)*el(n3)
-  ex = AWX(host,1)*el(n1) + AWX(host,2)*el(n2) + AWX(host,3)*el(n3)
-  ey = AWY(host,1)*el(n1) + AWY(host,2)*el(n2) + AWY(host,3)*el(n3)
+  e0  = AW0(host,1)*el(n1) + AW0(host,2)*el(n2) + AW0(host,3)*el(n3)
+  ex  = AWX(host,1)*el(n1) + AWX(host,2)*el(n2) + AWX(host,3)*el(n3)
+  ey  = AWY(host,1)*el(n1) + AWY(host,2)*el(n2) + AWY(host,3)*el(n3)
+
   elp = e0 + ex*x0c + ey*y0c
 end subroutine interp_elh
 
