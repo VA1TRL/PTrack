@@ -37,6 +37,8 @@ Where *run.dat* is the model configuration file.
  P_RND_WALK | boolean   | Apply random walk behaviour to the active particles
  K_XY       | m^2/s     | Horizontal particle diffusivity (used when P_RND_WALK is **T**)
  K_Z        | m^2/s     | Vertical particle diffusivity (used when P_RND_WALK is **T**)
+ P_2D_MODEL | boolean   | Run the model in 2D with a vertically averaged flow field
+ P_2D_VSURF | boolean   | Use the surface velocity field for a 2D simulation
 
 ## Grid and Flow-field file
 
