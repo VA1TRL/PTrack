@@ -267,6 +267,9 @@ contains
       call nc_3d_read(fileid, "u",  n, ELEMENTS, SIGLAY, u)
       call nc_3d_read(fileid, "v",  n, ELEMENTS, SIGLAY, v)
       call nc_3d_read(fileid, "ww", n, ELEMENTS, SIGLAY, w)
+    else if (P_2D_VSURF) then
+      call nc_3d_read(fileid, "u",  n, ELEMENTS, 1, u)
+      call nc_3d_read(fileid, "v",  n, ELEMENTS, 1, v)
     else
       allocate(ua(ELEMENTS), va(ELEMENTS))
       call nc_2d_read(fileid, "ua",  n, ELEMENTS, ua)

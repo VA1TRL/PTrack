@@ -164,7 +164,7 @@ contains
       !------------------------------------------------------------------------------|
       !  Run the tracking simulation                                                 |
       !------------------------------------------------------------------------------|
-      call traject_2d(SIM_TIME, reshape(up,[ELEMENTS]), reshape(u,[ELEMENTS]), reshape(vp,[ELEMENTS]), reshape(v,[ELEMENTS]))
+      call traject_2d(SIM_TIME, up(:,1), u(:,1), vp(:,1), v(:,1))
       if (P_RND_WALK) call random_walk(SIM_TIME)
 
       !------------------------------------------------------------------------------|

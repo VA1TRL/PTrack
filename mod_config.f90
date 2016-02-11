@@ -14,6 +14,7 @@ module mod_config
   logical :: OUT_SIGMA  ! Output particle z position as sigma depth instead of meters
   logical :: P_RND_WALK ! Apply a random walk behaviour to the active particles
   logical :: P_2D_MODEL ! Use a 2D, vertically averaged, flow field
+  logical :: P_2D_VSURF ! Use surface velocity field for 2D simulation
 
   real    :: K_XY ! Horizontal particle diffusivity
   real    :: K_Z  ! Vertical particle diffusivity
@@ -80,6 +81,9 @@ contains
 
     iscan = scan_file(CASENAME, "P_RND_WALK", lval = P_RND_WALK)
     if (iscan /= 0) P_RND_WALK = .false.
+
+    iscan = scan_file(CASENAME, "P_2D_VSURF", lval = P_2D_VSURF)
+    if (iscan /= 0) P_2D_VSURF = .false.
 
     iscan = scan_file(CASENAME, "P_2D_MODEL", lval = P_2D_MODEL)
     if (iscan /= 0) P_2D_MODEL = .false.
