@@ -11,20 +11,29 @@
  * coordinate variables, in the order:                                        *
  *   -v longitude_var latitude_var x_var y_var                                *
  *                                                                            *
+ * The -g argument tells the program to generate a new projection reference   *
+ * even if the "CoordinateProjection" global attribute exists in the file.    *
+ *                                                                            *
+ * The -s option suppresses the write-back of the projection reference.       *
+ *                                                                            *
  * Author: Tristan.Losier@unb.ca                                              *
  ******************************************************************************/
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <netcdf.h>
 #include <proj_api.h>
 
-#define USAGE_STRING "Command usage:\n    fixproj [-p projection] [-i] [-v lon lat x y] file_to_process.nc"
+#define USAGE_STRING  "Command usage:\n    fixproj [-p projection] [-i] [-v lon lat x y] [-g] [-s] file_to_process.nc"
 #define PROJ_ATT_NAME "CoordinateProjection"
+#define PROJ_FORMAT   "+proj=lcc +lon_0=%0.2f +lat_0=%0.2f +lat_1=%0.1f +lat_2=%0.1f +ellps=WGS84"
 
 #define ARG_PROJ 'p'
 #define ARG_INV  'i'
 #define ARG_VAR  'v'
+#define ARG_GEN  'g'
+#define ARG_SUPR 's'
 
 #define ERR_MEM    0
 #define ERR_NETCDF 1
@@ -32,10 +41,27 @@
 
 projPJ proj_src;
 projPJ proj_dst;
-int proj_inv;
+int    proj_inv;
 
-void init_proj(char * proj, int ncid);
-void project(int ncid, int inx, int iny, int outx, int outy);
+typedef struct _ncdata {
+    int    ncid;
+    int    lonid;
+    int    latid;
+    int    xid;
+    int    yid;
+    size_t count;
+} ncdata;
+
+void save_proj_ref(int ncid, const char * proj);
+ncdata * init_data(const char * file,
+                   const char * lon,
+                   const char * lat,
+                   const char * x,
+                   const char * y);
+char * get_proj_ref(ncdata * data, int gen);
+void init_proj(char * proj);
+void project(ncdata * data);
+void sanitize_angles(int count, ...);
 void handle_error(int source, int status);
 
 int main(int argc, char ** argv)
@@ -46,8 +72,10 @@ int main(int argc, char ** argv)
     char * yvar = "y";
     char * ncdf = NULL;
     char * proj = NULL;
-    int ncid, status, i;
-    int lonid, latid, xid, yid;
+    int gen_proj = 0;
+    int writeback = 1;
+    int i;
+    ncdata * data;
 
     // Read input parameters
     for (i = 0; i < argc; i++) {
@@ -69,72 +97,152 @@ int main(int argc, char ** argv)
                 xvar = argv[++i];
                 yvar = argv[++i];
                 break;
+
+            case ARG_GEN:
+                gen_proj = 1;
+                break;
+
+            case ARG_SUPR:
+                writeback = 0;
             }
         }
         else if (i > 0) ncdf = argv[i];
     }
 
-    // Open NetCDF file
+    // Make sure the user provided necessary arguments
     if (ncdf == NULL) {
         fprintf(stderr, "ERROR: NetCDF input file not specified\n");
-        printf("%s\n", USAGE_STRING);
+        fprintf(stderr, "%s\n", USAGE_STRING);
         exit(EXIT_FAILURE);
     }
-    status = nc_open(ncdf, NC_WRITE, &ncid);
-    handle_error(ERR_NETCDF, status);
-
-    // Get NetCDF variable ids for the coordinate variables
-    status = nc_inq_varid(ncid, lonvar, &lonid);
-    handle_error(ERR_NETCDF, status);
-    status = nc_inq_varid(ncid, latvar, &latid);
-    handle_error(ERR_NETCDF, status);
-    status = nc_inq_varid(ncid, xvar, &xid);
-    handle_error(ERR_NETCDF, status);
-    status = nc_inq_varid(ncid, yvar, &yid);
-    handle_error(ERR_NETCDF, status);
 
     // Do the projection
-    init_proj(proj, ncid);
-    if (!proj_inv)
-        project(ncid, lonid, latid, xid, yid);
-    else
-        project(ncid, xid, yid, lonid, latid);
+    data = init_data(ncdf, lonvar, latvar, xvar, yvar);
+    if (proj == NULL) proj = get_proj_ref(data, gen_proj);
+    if (writeback) save_proj_ref(data->ncid, proj);
+    init_proj(proj);
+    project(data);
 
     // Done, close the NetCDF file and exit
     pj_free(proj_src);
     pj_free(proj_dst);
-    status = nc_close(ncid);
-    handle_error(ERR_NETCDF, status);
+    nc_close(data->ncid);
     exit(EXIT_SUCCESS);
 }
 
-void init_proj(char * proj, int ncid)
+void save_proj_ref(int ncid, const char * proj)
+{
+    // Update the file's projection reference attribute
+    int status = nc_redef(ncid);
+    handle_error(ERR_NETCDF, status);
+    status = nc_put_att_text(ncid, NC_GLOBAL, PROJ_ATT_NAME, strlen(proj), proj);
+    handle_error(ERR_NETCDF, status);
+    status = nc_enddef(ncid);
+    handle_error(ERR_NETCDF, status);
+}
+
+ncdata * init_data(const char * file,
+                   const char * lon,
+                   const char * lat,
+                   const char * x,
+                   const char * y)
 {
     int status;
-    if (proj == NULL) {
-        // If the user did not provide a projection reference via the command line
-        // we read it from the NetCDF file's CoordinateProjection global attribute
-        printf("No projection reference specified, using the %s global attribute\n", PROJ_ATT_NAME);
-        size_t length;
-        status = nc_inq_attlen(ncid, NC_GLOBAL, PROJ_ATT_NAME, &length);
-        handle_error(ERR_NETCDF, status);
+    ncdata * data = malloc(sizeof(ncdata));
+    if (data == NULL) handle_error(ERR_MEM, 0);
 
-        proj = malloc(length + 1); // +1 for trailing NULL
-        if (proj == NULL) handle_error(ERR_MEM, 0);
-        status = nc_get_att_text(ncid, NC_GLOBAL, PROJ_ATT_NAME, proj);
-        handle_error(ERR_NETCDF, status);
+    // Open NetCDF file
+    status = nc_open(file, NC_WRITE, &data->ncid);
+    handle_error(ERR_NETCDF, status);
 
-        proj[length] = '\0';
-    } else {
-        // If they did, update the file's projection reference attribute instead
-        status = nc_redef(ncid);
+    // Get NetCDF variable ids for the coordinate variables
+    status = nc_inq_varid(data->ncid, lon, &data->lonid);
+    handle_error(ERR_NETCDF, status);
+    status = nc_inq_varid(data->ncid, lat, &data->latid);
+    handle_error(ERR_NETCDF, status);
+    status = nc_inq_varid(data->ncid, x, &data->xid);
+    handle_error(ERR_NETCDF, status);
+    status = nc_inq_varid(data->ncid, y, &data->yid);
+    handle_error(ERR_NETCDF, status);
+
+    // Find the number of points being transformed
+    int ndim;
+    status = nc_inq_varndims(data->ncid, data->xid, &ndim);
+    handle_error(ERR_NETCDF, status);
+    int dimids[ndim];
+    status = nc_inq_vardimid(data->ncid, data->xid, dimids);
+    handle_error(ERR_NETCDF, status);
+    data->count = 1;
+    int i;
+    for (i = 0; i < ndim; i++) {
+        size_t dimlen;
+        status = nc_inq_dimlen(data->ncid, dimids[i], &dimlen);
         handle_error(ERR_NETCDF, status);
-        status = nc_put_att_text(ncid, NC_GLOBAL, PROJ_ATT_NAME, strlen(proj), proj);
-        handle_error(ERR_NETCDF, status);
-        status = nc_enddef(ncid);
-        handle_error(ERR_NETCDF, status);
+        data->count *= dimlen;
     }
 
+    return data;
+}
+
+char * get_proj_ref(ncdata * data, int gen)
+{
+    char * proj;
+
+    // If the user did not provide a projection reference via the command line
+    // we first check the NetCDF file's CoordinateProjection global attribute
+    size_t length;
+    int status = nc_inq_attlen(data->ncid, NC_GLOBAL, PROJ_ATT_NAME, &length);
+    if (status == NC_NOERR && length > 0 && !gen) {
+        printf("Using the %s global attribute.\n", PROJ_ATT_NAME);
+        proj = malloc(length + 1); // +1 for trailing NULL
+        if (proj == NULL) handle_error(ERR_MEM, 0);
+        status = nc_get_att_text(data->ncid, NC_GLOBAL, PROJ_ATT_NAME, proj);
+        handle_error(ERR_NETCDF, status);
+        proj[length] = '\0';
+        return proj;
+    }
+
+    // If the NetCDF file does not have a projection reference we create one
+    // that produces minimal distortion across the mesh domain
+    printf("Generating new projection reference.\n");
+    float * lon = malloc(data->count*sizeof(float));
+    float * lat = malloc(data->count*sizeof(float));
+    if (lon == NULL || lat == NULL) handle_error(ERR_MEM, 0);
+    status = nc_get_var_float(data->ncid, data->lonid, lon);
+    handle_error(ERR_NETCDF, status);
+    status = nc_get_var_float(data->ncid, data->latid, lat);
+    handle_error(ERR_NETCDF, status);
+
+    double minlon = lon[0];
+    double maxlon = lon[0];
+    double minlat = lat[0];
+    double maxlat = lat[0];
+    int i;
+    for (i = 0; i < data->count; i++) {
+        if (lon[i] < minlon) minlon = lon[i];
+        if (lon[i] > maxlon) maxlon = lon[i];
+        if (lat[i] < minlat) minlat = lat[i];
+        if (lat[i] > maxlat) maxlat = lat[i];
+    }
+    sanitize_angles(4, &minlon, &maxlon, &minlat, &maxlat);
+    double xc = (maxlon - minlon)/2.0 + minlon;
+    double yc = (maxlat - minlat)/2.0 + minlat;
+    double y1 = yc - (maxlat - minlat)*2.0/6.0;
+    double y2 = yc + (maxlat - minlat)*2.0/6.0;
+
+    char tempstr[90];
+    sprintf(tempstr, PROJ_FORMAT, xc, yc, y1, y2);
+    proj = malloc(strlen(tempstr) + 1);
+    if (proj == NULL) handle_error(ERR_MEM, 0);
+    strcpy(proj, tempstr);
+
+    free(lon);
+    free(lat);
+    return proj;
+}
+
+void init_proj(char * proj)
+{
     // Initialization routine for the projection lib
     proj_dst = pj_init_plus(proj);
     if (proj_dst == NULL) handle_error(ERR_PROJ, *pj_get_errno_ref());
@@ -147,43 +255,37 @@ void init_proj(char * proj, int ncid)
         proj_src = proj_dst;
         proj_dst = tmp;
     }
+
     printf("Source projection:      %s\n", pj_get_def(proj_src, 0));
     printf("Destination projection: %s\n", pj_get_def(proj_dst, 0));
 }
 
-void project(int ncid, int inx, int iny, int outx, int outy)
+void project(ncdata * data)
 {
     int status, i;
-    size_t count = 1;
-
-    // Find the number of points being transformed
-    int ndim;
-    status = nc_inq_varndims(ncid, inx, &ndim);
-    handle_error(ERR_NETCDF, status);
-    int dimids[ndim];
-    status = nc_inq_vardimid(ncid, inx, dimids);
-    handle_error(ERR_NETCDF, status);
-    for (i = 0; i < ndim; i++) {
-        size_t dimlen;
-        status = nc_inq_dimlen(ncid, dimids[i], &dimlen);
-        handle_error(ERR_NETCDF, status);
-        count *= dimlen;
-    }
 
     // Allocate memory for the transformation
-    float * nc_x = malloc(count*sizeof(float));
-    float * nc_y = malloc(count*sizeof(float));
-    double * pj_x = malloc(count*sizeof(double));
-    double * pj_y = malloc(count*sizeof(double));
+    float  * nc_x = malloc(data->count*sizeof(float));
+    float  * nc_y = malloc(data->count*sizeof(float));
+    double * pj_x = malloc(data->count*sizeof(double));
+    double * pj_y = malloc(data->count*sizeof(double));
     if (nc_x == NULL || nc_y == NULL || pj_x == NULL || pj_y == NULL)
         handle_error(ERR_MEM, 0);
 
     // Get the source coordinates
-    status = nc_get_var_float(ncid, inx, nc_x);
-    handle_error(ERR_NETCDF, status);
-    status = nc_get_var_float(ncid, iny, nc_y);
-    handle_error(ERR_NETCDF, status);
-    for (i = 0; i < count; i++) {
+    if (proj_inv) {
+        status = nc_get_var_float(data->ncid, data->xid, nc_x);
+        handle_error(ERR_NETCDF, status);
+        status = nc_get_var_float(data->ncid, data->yid, nc_y);
+        handle_error(ERR_NETCDF, status);
+    } else {
+        status = nc_get_var_float(data->ncid, data->lonid, nc_x);
+        handle_error(ERR_NETCDF, status);
+        status = nc_get_var_float(data->ncid, data->latid, nc_y);
+        handle_error(ERR_NETCDF, status);
+    }
+
+    for (i = 0; i < data->count; i++) {
         pj_x[i] = (double)nc_x[i];
         pj_y[i] = (double)nc_y[i];
         if (!proj_inv) {
@@ -193,12 +295,12 @@ void project(int ncid, int inx, int iny, int outx, int outy)
     }
 
     // Do the transformation
-    status = pj_transform(proj_src, proj_dst, count, 1, pj_x, pj_y, NULL);
+    status = pj_transform(proj_src, proj_dst, data->count, 1, pj_x, pj_y, NULL);
     handle_error(ERR_PROJ, status);
-    printf("Done transforming %d points\n", (int)count);
+    printf("Done transforming %d points\n", (int)data->count);
 
     // Save the results
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < data->count; i++) {
         if (proj_inv) {
             pj_x[i] *= RAD_TO_DEG;
             pj_y[i] *= RAD_TO_DEG;
@@ -206,15 +308,38 @@ void project(int ncid, int inx, int iny, int outx, int outy)
         nc_x[i] = (float)pj_x[i];
         nc_y[i] = (float)pj_y[i];
     }
-    status = nc_put_var_float(ncid, outx, nc_x);
-    handle_error(ERR_NETCDF, status);
-    status = nc_put_var_float(ncid, outy, nc_y);
-    handle_error(ERR_NETCDF, status);
+
+    if (proj_inv) {
+        status = nc_put_var_float(data->ncid, data->lonid, nc_x);
+        handle_error(ERR_NETCDF, status);
+        status = nc_put_var_float(data->ncid, data->latid, nc_y);
+        handle_error(ERR_NETCDF, status);
+    } else {
+        status = nc_put_var_float(data->ncid, data->xid, nc_x);
+        handle_error(ERR_NETCDF, status);
+        status = nc_put_var_float(data->ncid, data->yid, nc_y);
+        handle_error(ERR_NETCDF, status);
+    }
 
     free(nc_x);
     free(nc_y);
     free(pj_x);
     free(pj_y);
+}
+
+void sanitize_angles(int count, ...)
+{
+    // This function accepts a list of angles in degrees (double *), and
+    // adjusts them to fall within the range (-180, 180)
+    int i;
+    va_list vars;
+    va_start(vars, count);
+    for (i = 0; i < count; i++) {
+        double * val = va_arg(vars, double *);
+        while (*val >  180.0) *val -= 360.0;
+        while (*val < -180.0) *val += 360.0;
+    }
+    va_end(vars);
 }
 
 void handle_error(int source, int status)

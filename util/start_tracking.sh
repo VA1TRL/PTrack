@@ -40,18 +40,24 @@ do
 done < $1
 
 # Perform coordinate transformation on the grid file
-$FIXPROJ -p "$PROJ" $GRIDFN
-$FIXPROJ -p "$PROJ" -v lonc latc xc yc $GRIDFN
+if [ -n "$PROJ" ]
+then
+    $FIXPROJ -p "$PROJ" $GRIDFN
+    $FIXPROJ -p "$PROJ" -v lonc latc xc yc $GRIDFN
+else
+    $FIXPROJ -g $GRIDFN
+    $FIXPROJ -v lonc latc xc yc $GRIDFN
+fi
 
 # If needed, generate the particle seed file
 if [ -n "$SEEDDAT" ]
 then
-    $GENSEED -p "$PROJ" -t -o $SEEDFN $SEEDDAT
+    $GENSEED -f $GRIDFN -t -o $SEEDFN $SEEDDAT
 fi
 
 # Run the tracking simulation
 $PTRACK $1
 
 # Perform coordinate transformation on the simulation output file
-$FIXPROJ -p "$PROJ" -i $OUTFN
+$FIXPROJ -i $OUTFN
 
