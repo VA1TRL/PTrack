@@ -1,20 +1,26 @@
 /******************************************************************************
- * This program applies a cartographic projection to the spherical coordinate *
- * values contained in the provided NetCDF file. If the projection reference  *
- * was not provided via the command line with the -p option, this program     *
- * will attempt to read it from the NetCDF file's "CoordinateProjection"      *
- * global attribute.                                                          *
+ * fixproj is designed to take spherical coordinates from a NetCDF file       *
+ * (lon,lat), transform the coordinates with a PROJ.4 cartographic projection *
+ * reference, and save the results (x,y). By default fixproj will attempt to  *
+ * read the projection reference from the NetCDF file's global                *
+ * CoordinateProjection attribute, but if a reference is not found a new one  *
+ * will be generated to optimally fit the bounds of the data.                 *
  *                                                                            *
- * The -i argument causes the program to perform an inverse projection.       *
+ * Available command line options are:                                        *
+ *  -p proj                                                                   *
+ *      Provide a geographic projection reference string to be used.          *
  *                                                                            *
- * The -v argument provides alternative names for the Cartesian and spherical *
- * coordinate variables, in the order:                                        *
- *   -v longitude_var latitude_var x_var y_var                                *
+ *  -i                                                                        *
+ *      Perform an inverse projection.                                        *
  *                                                                            *
- * The -g argument tells the program to generate a new projection reference   *
- * even if the "CoordinateProjection" global attribute exists in the file.    *
+ *  -v longitude_var latitude_var x_var y_var                                 *
+ *      Provide alternative names for the coordinate variables.               *
  *                                                                            *
- * The -s option suppresses the write-back of the projection reference.       *
+ *  -g                                                                        *
+ *      Force the generation of a new projection reference.                   *
+ *                                                                            *
+ *  -s                                                                        *
+ *      Suppresses the write-back of the used projection reference.           *
  *                                                                            *
  * Author: Tristan.Losier@unb.ca                                              *
  ******************************************************************************/
@@ -25,6 +31,9 @@
 #include <netcdf.h>
 #include <proj_api.h>
 
+/******************************************************************************
+ *  Header Data                                                               *
+ ******************************************************************************/
 #define USAGE_STRING  "Command usage:\n    fixproj [-p projection] [-i] [-v lon lat x y] [-g] [-s] file_to_process.nc"
 #define PROJ_ATT_NAME "CoordinateProjection"
 #define PROJ_FORMAT   "+proj=lcc +lon_0=%0.2f +lat_0=%0.2f +lat_1=%0.1f +lat_2=%0.1f +ellps=WGS84"
@@ -64,6 +73,9 @@ void project(ncdata * data);
 void sanitize_angles(int count, ...);
 void handle_error(int source, int status);
 
+/******************************************************************************
+ *  Program entry point                                                       *
+ ******************************************************************************/
 int main(int argc, char ** argv)
 {
     char * lonvar = "lon";
@@ -130,9 +142,11 @@ int main(int argc, char ** argv)
     exit(EXIT_SUCCESS);
 }
 
+/******************************************************************************
+ *  Save a projection reference string to the provided NetCDF file            *
+ ******************************************************************************/
 void save_proj_ref(int ncid, const char * proj)
 {
-    // Update the file's projection reference attribute
     int status = nc_redef(ncid);
     handle_error(ERR_NETCDF, status);
     status = nc_put_att_text(ncid, NC_GLOBAL, PROJ_ATT_NAME, strlen(proj), proj);
@@ -141,6 +155,9 @@ void save_proj_ref(int ncid, const char * proj)
     handle_error(ERR_NETCDF, status);
 }
 
+/******************************************************************************
+ *  Create and initialize a ncdata object using the NetCDF file provided      *
+ ******************************************************************************/
 ncdata * init_data(const char * file,
                    const char * lon,
                    const char * lat,
@@ -184,6 +201,11 @@ ncdata * init_data(const char * file,
     return data;
 }
 
+/******************************************************************************
+ *  Get a projection reference from the provided NetCDF file. Either from     *
+ *  the PROJ_ATT_NAME global attribute, or by generating one to fit the       *
+ *  boundaries of the data contained within the file.                         *
+ ******************************************************************************/
 char * get_proj_ref(ncdata * data, int gen)
 {
     char * proj;
@@ -241,6 +263,9 @@ char * get_proj_ref(ncdata * data, int gen)
     return proj;
 }
 
+/******************************************************************************
+ *  Initialize the global forward and reverse projection references           *
+ ******************************************************************************/
 void init_proj(char * proj)
 {
     // Initialization routine for the projection lib
@@ -260,6 +285,10 @@ void init_proj(char * proj)
     printf("Destination projection: %s\n", pj_get_def(proj_dst, 0));
 }
 
+/******************************************************************************
+ *  Use the global projection references to transform the data in the         *
+ *  NetCDF file represented by the provided ncdata reference                  *
+ ******************************************************************************/
 void project(ncdata * data)
 {
     int status, i;
@@ -327,10 +356,12 @@ void project(ncdata * data)
     free(pj_y);
 }
 
+/******************************************************************************
+ *  Take a list of angles in degrees (double *), and adjusts them to fall     *
+ *  within the range (-180, 180)                                              *
+ ******************************************************************************/
 void sanitize_angles(int count, ...)
 {
-    // This function accepts a list of angles in degrees (double *), and
-    // adjusts them to fall within the range (-180, 180)
     int i;
     va_list vars;
     va_start(vars, count);
@@ -342,6 +373,9 @@ void sanitize_angles(int count, ...)
     va_end(vars);
 }
 
+/******************************************************************************
+ *  Check for standard errors, and print descriptive error text if needed     *
+ ******************************************************************************/
 void handle_error(int source, int status)
 {
     switch(source) {

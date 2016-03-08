@@ -79,21 +79,26 @@ To ensure all of the required variables are present in the file, the following o
 
 ### *fixproj*
 
-The *fixproj* program is designed to take geographic coordinate variables, transform the coordinates according to a given cartographic projection, and then save the results back to the NetCDF file. By default the program will use **lon**/**lat** as the names for spherical coordinates, and **x**/**y** as the names for Cartesian coordinate variables. The default behaviour is to do a forward (Spherical to Cartesian) projection. The syntax for running *fixproj* is as follows:
+*fixproj* is designed to take spherical coordinates from a NetCDF file (**lon**,**lat**), transform the coordinates with a PROJ.4 cartographic projection reference, and save the results (**x**,**y**). By default *fixproj* will attempt to read the projection reference from the NetCDF file's global **CoordinateProjection** attribute, but if a reference is not found a new one will be generated to optimally fit the bounds of the data.
+
+#### Command options
+
+* `-p` *proj*
+  * Provide a geographic projection reference string to be used.
+* `-i`
+  * Perform an inverse projection.
+* `-v` *longitude_var latitude_var x_var y_var*
+  * Provide alternative names for the coordinate variables.
+* `-g`
+  * Force the generation of a new projection reference.
+* `-s`
+  * Suppresses the write-back of the used projection reference.
+
+#### Usage
 
 ```sh
-fixproj [-p projection] [-i] [-v lon lat x y] file_to_process.nc
+fixproj [-p projection] [-i] [-v lon lat x y] [-g] [-s] file_to_process.nc
 ```
-
-Command arguments:
-
-* `v` - Use alternate coordinate variable names (optional)
-* `i` - Perform an inverse projection (Cartesian to Spherical) (optional)
-* `p` - Provide a PROJ.4 compatible projection reference (optional)
-
-If a projection reference is not provided, *fixproj* will attempt to use the NetCDF file's **CoordinateProjection** global attribute. If the attribute does not contain a valid projection reference the program will fail. If a projection reference is provided via the command line, the program will save the reference back to this global attribute; as the Cartesian coordinates are effectively meaningless without a way to reference them back to a known point on the globe.
-If the `-i` argument is not used, the program will perform a regular (Spherical to Cartesian) cartographic projection.
-The `-v` argument provides a way to specify alternate names for the coordinate variables, in the order: longitude, latitude, x, and y.
 
 ## Particle seed file
 
@@ -110,21 +115,26 @@ The particle seed file contains the initial positions of all particles to be rel
 
 ### *genseed*
 
-The *genseed* program may be used to generate the particle seed file from a text-based *.dat* file, and allows for some flexibility with the format of the input data. The syntax for using *genseed* is as follows:
+*genseed* generates a NetCDF particle seed file from a text-based .dat file, allowing for some flexibility with the format of the input data. If a projection reference is not provided, it is assumed that the particle coordinates are already Cartesian. Note: the projection reference used for the seed file **must** match the reference used for the NetCDF flow-field file, otherwise the simulation results will be meaningless.
+
+#### Command options
+
+* `-p` *proj*
+  * Use the provided geographic projection reference string (PROJ.4) to transform the seed file coordinates.
+* `-o` *outfile*
+  * Specify an output file. The name of the input file, except with a ".nc" extension, will be used if a name is not provided.
+* `-t`
+  * Dates in the input file will be formatted as `dd/mm/yyyy hh:mm:ss`
+* `-f` *projfile*
+  * Same as -p, but read the projection reference from the provided NetCDF file's global CoordinateProjection attribute.
+
+#### Usage
 
 ```sh
-genseed [-o outfile.nc] [-t] [-p projection] particle_release.dat
+genseed [-o outfile.nc] [-t] [-p proj] [-f projfile.nc] particle_release.dat
 ```
 
-Command arguments:
-
-* `p` - Specify a projection reference (optional)
-* `t` - Use yyyy-mm-dd hh:mm:ss date formatting (optional)
-* `o` - Specify an output file name (optional)
-
-If a projection reference is not provided, it is assumed that the particle coordinates are already Cartesian. Note: the projection reference used for the seed file **must** match the reference used for the NetCDF flow-field file, otherwise the simulation results will be meaningless.
-The `-t` argument tells *genseed* to read the release and track end times as date strings (yyyy-mm-dd hh:mm:ss). If the option is not used it will be assumed that the times are Modified Julian Dates (days since 1858-11-17 00:00:00).
-If an output file name is not provided, the file will have the same name as the input file except with a *.nc* file extension instead of *.dat*.
+#### File format
 
 Each line of the file defines a different hypothetical seed particle, with the parameters separated by one or more spaces. The order of the parameters, along with their meaning, is given in the following table:
 

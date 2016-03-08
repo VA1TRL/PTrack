@@ -1,16 +1,22 @@
 /******************************************************************************
- * This program converts a particle_release.dat file to NetCDF format,        *
- * suitable for use by PTrack.                                                *
+ * genseed generates a NetCDF particle seed file from a text-based .dat file, *
+ * allowing for some flexibility with the format of the input data.           *
  *                                                                            *
- * The -p argument is required, and is used to provide a PROJ.4 compatible    *
- * geographic projection reference.                                           *
+ * Available command line options are:                                        *
+ *  -p proj                                                                   *
+ *      Use the provided geographic projection reference string (PROJ.4) to   *
+ *      transform the seed file coordinates.                                  *
  *                                                                            *
- * The -o option may be used to specify an output file name. By default the   *
- * file will have the same name as the input file, except with a ".nc"        *
- * extension instead of ".dat".                                               *
+ *  -o outfile.nc                                                             *
+ *      Specify an output file. The name of the input file, except with a     *
+ *      ".nc" extension, will be used if a name is not provided.              *
  *                                                                            *
- * The -t option tells the program to read start and start dates formatted    *
- * as "dd/mm/yyyy hh:mm:ss" instead of a Modified Julian Date.                *
+ *  -t                                                                        *
+ *      Dates in the input file will be formatted as "dd/mm/yyyy hh:mm:ss"    *
+ *                                                                            *
+ *  -f projfile.nc                                                            *
+ *      Same as -p, but read the projection reference from the provided       *
+ *      NetCDF file's global CoordinateProjection attribute.                  *
  *                                                                            *
  * Author: Tristan.Losier@unb.ca                                              *
  ******************************************************************************/
@@ -19,7 +25,10 @@
 #include <proj_api.h>
 #include <netcdf.h>
 
-#define USAGE_STRING  "Command usage:\n    genseed [-o outfile.nc] [-t] [-p projection] particle_release.dat"
+/******************************************************************************
+ *  Header Data                                                               *
+ ******************************************************************************/
+#define USAGE_STRING  "Command usage:\n    genseed [-o outfile.nc] [-t] [-p proj] [-f projfile.nc] particle_release.dat"
 #define PROJ_ATT_NAME "CoordinateProjection"
 
 #define ARG_PROJ  'p'
@@ -56,6 +65,9 @@ void handle_error(int status);
 void save_points(ncfile * file, point * pts);
 void print_points(point * pts);
 
+/******************************************************************************
+ *  Program entry point                                                       *
+ ******************************************************************************/
 int main(int argc, char ** argv)
 {
     char * inFile  = NULL;
@@ -121,7 +133,9 @@ int main(int argc, char ** argv)
     exit(EXIT_SUCCESS);
 }
 
-// Handle status codes returned from the NetCDF library
+/******************************************************************************
+ *  Handle status codes returned by the NetCDF library                        *
+ ******************************************************************************/
 void handle_error(int status)
 {
     if (status != NC_NOERR) {
@@ -130,7 +144,9 @@ void handle_error(int status)
     }
 }
 
-// Format the provided date/time as a Modified Julian Day
+/******************************************************************************
+ *  Format the provided date/time as a Modified Julian Day                    *
+ ******************************************************************************/
 float mjd(int day, int month, int year, int hour, int minute, int second)
 {
     int a = (14 - month)/12;
@@ -143,20 +159,21 @@ float mjd(int day, int month, int year, int hour, int minute, int second)
     return (float)(jd - 2400000.5);
 }
 
-/* Read the specified particle seeding .dat file into a linked-list of point objects.
- * The .dat file should contain one particle record per line, with the parameters describing
- * the particle separated by one or more spaces. The order and meaning of the parameters
- * that make up the particle record are detailed in the following table.
- *
- *  Column | Name           | Type  | Units                      | Description
- *  ------ | -------------- | ----- | -------------------------- | -----------
- *  1      | ID             | int   | none                       | Arbitrary identifier
- *  2      | X              | float | meters or degrees_east     | Domain x coordinate
- *  3      | Y              | float | meters or degrees_north    | Domain y coordinate
- *  4      | Z              | float | meters                     | Downward positive particle depth
- *  5      | Release Time   | float | MJD or yyyy-mm-dd hh:mm:ss | Time to release particle into the simulation
- *  6      | Track End Time | float | MJD or yyyy-mm-dd hh:mm:ss | Time to remove particle from the simulation
- */
+/****************************************************************************************************************
+ * Read the specified particle seeding .dat file into a linked-list of point objects.                           *
+ * The .dat file should contain one particle record per line, with the parameters describing                    *
+ * the particle separated by one or more spaces. The order and meaning of the parameters                        *
+ * that make up the particle record are detailed in the following table.                                        *
+ *                                                                                                              *
+ *  Column | Name           | Type  | Units                      | Description                                  *
+ *  ------ | -------------- | ----- | -------------------------- | -----------                                  *
+ *  1      | ID             | int   | none                       | Arbitrary identifier                         *
+ *  2      | X              | float | meters or degrees_east     | Domain x coordinate                          *
+ *  3      | Y              | float | meters or degrees_north    | Domain y coordinate                          *
+ *  4      | Z              | float | meters                     | Downward positive particle depth             *
+ *  5      | Release Time   | float | MJD or yyyy-mm-dd hh:mm:ss | Time to release particle into the simulation *
+ *  6      | Track End Time | float | MJD or yyyy-mm-dd hh:mm:ss | Time to remove particle from the simulation  *
+ ****************************************************************************************************************/
 point * read_file(const char * file, int dmy_fmt)
 {
     FILE * fp = fopen(file, "r");
@@ -191,7 +208,9 @@ point * read_file(const char * file, int dmy_fmt)
     return plist;
 }
 
-// Get a projection reference from the provided NetCDF file
+/******************************************************************************
+ *  Get a projection reference from the provided NetCDF file                  *
+ ******************************************************************************/
 char * read_proj(const char * pfile)
 {
     char * proj;
@@ -214,7 +233,10 @@ char * read_proj(const char * pfile)
     return proj;
 }
 
-// Create a new NetCDF file, formatted for the particle location/release data
+/******************************************************************************
+ *  Create a new NetCDF file, formatted to contain the particle               *
+ *  location/release data                                                     *
+ ******************************************************************************/
 ncfile * create_outfile(const char * file)
 {
     int status, dimid;
@@ -275,8 +297,11 @@ ncfile * create_outfile(const char * file)
     return nc;
 }
 
-// Perform a coordinate transformation on the point list, to convert spherical coordinates into
-// Cartesian coordinates using the provided projection reference
+/******************************************************************************
+ *  Perform coordinate transformations on a list of points, converting        *
+ *  spherical coordinates into Cartesian coordinates using the provided       *
+ *  projection reference                                                      *
+ ******************************************************************************/
 void project(const char * proj, point * plist)
 {
     projPJ pj_lcc = pj_init_plus(proj);
@@ -311,8 +336,10 @@ void project(const char * proj, point * plist)
     pj_free(pj_lcc);
 }
 
-// This function accepts a list of particles, and saves the contents of that
-// list to the NetCDF file that the provided ncfile object points to.
+/******************************************************************************
+ *  This function accepts a list of particles, and saves the contents of the  *
+ *  list to the NetCDF file the ncfile object points to                       *
+/******************************************************************************/
 void save_points(ncfile * file, point * pts)
 {
     int status;
