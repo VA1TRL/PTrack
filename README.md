@@ -122,11 +122,11 @@ The particle seed file contains the initial positions of all particles to be rel
 * `-p` *proj*
   * Use the provided geographic projection reference string (PROJ.4) to transform the seed file coordinates.
 * `-o` *outfile*
-  * Specify an output file. The name of the input file, except with a ".nc" extension, will be used if a name is not provided.
+  * Specify an output file. The name of the input file, except with a `.nc` file extension, will be used if a name is not provided.
 * `-t`
   * Dates in the input file will be formatted as `dd/mm/yyyy hh:mm:ss`
 * `-f` *projfile*
-  * Same as -p, but read the projection reference from the provided NetCDF file's global CoordinateProjection attribute.
+  * Same as `-p`, but read the projection reference from the provided NetCDF file's global **CoordinateProjection** attribute.
 
 #### Usage
 
@@ -138,14 +138,14 @@ genseed [-o outfile.nc] [-t] [-p proj] [-f projfile.nc] particle_release.dat
 
 Each line of the file defines a different hypothetical seed particle, with the parameters separated by one or more spaces. The order of the parameters, along with their meaning, is given in the following table:
 
- Column | Name           | Type  | Units                        | Description
- ------ | -------------- | ----- | ---------------------------- | -----------
- 1      | ID             | int   | none                         | Arbitrary identifier
- 2      | X              | float | meters *or* degrees_east     | Domain x coordinate
- 3      | Y              | float | meters *or* degrees_north    | Domain y coordinate
- 4      | Z              | float | meters                       | Downward positive particle depth
- 5      | Release Time   | float | MJD *or* yyyy-mm-dd hh:mm:ss | Time to release particle into the simulation
- 6      | Track End Time | float | MJD *or* yyyy-mm-dd hh:mm:ss | Time to remove particle from the simulation
+ Column | Name           | Type  | Units                          | Description
+ ------ | -------------- | ----- | ------------------------------ | -----------
+ 1      | ID             | int   | none                           | Arbitrary identifier
+ 2      | X              | float | meters *or* degrees_east       | Domain x coordinate
+ 3      | Y              | float | meters *or* degrees_north      | Domain y coordinate
+ 4      | Z              | float | meters                         | Downward positive particle depth
+ 5      | Release Time   | float | MJD *or* `yyyy-mm-dd hh:mm:ss` | Time to release particle into the simulation
+ 6      | Track End Time | float | MJD *or* `yyyy-mm-dd hh:mm:ss` | Time to remove particle from the simulation
 
 ## Simulation output
 
@@ -158,4 +158,100 @@ The simulation output file contains all of the results from the simulation, and 
  x        | float | time, number | meters | Domain x coordinate
  y        | float | time, number | meters | Domain y coordinate
  z        | float | time, number | meters | Downward positive particle depth
+
+# Development
+
+## Primary functions and subroutines
+
+The following subroutines form the top-level elements of the *PTrack* program, organized by their primary function.
+
+### Model initialization
+
+The initialization functions read the model setup data from the various input files, and uses that data to create and fill the various data structures used by the program. The most important of these data structures are the `mod_tracking_data` module, which contains the data arrays holding particle state information, and the `mod_flow_field` module. Which holds domain information, such as the mesh data, and flow field state data.
+
+* `init_model`
+* `init_flow_field`
+* `init_tracking`
+
+### Simulation loop
+
+The core of the tracking simulation is the main program loop, which iterates over time by constant increments of **DTI** seconds; each full iteration of the loop progressing the model by one time step.
+
+* `run_tracking`
+
+### Particle model
+
+These subroutines are called on every iteration of the model from the simulation loop, and implement the behaviours and motions of the particles.
+
+* `traject`
+* `random_walk`
+
+### File I/O
+
+The subroutines that retrieve forcing data and save model results on each iteration of the simulation loop.
+
+* `get_flow_at`
+* `write_track`
+
+## Program files
+
+* PTrack.f90
+  * **program** particle_traj
+* mod_tracking.f90
+  * **module** mod_tracking
+  * **subroutine** init_tracking
+  * **subroutine** run_tracking
+  * **subroutine** run_2d_tracking
+* mod_tracking_data.f90
+  * **module** mod_tracking_data
+  * **subroutine** read_seed
+  * **subroutine** write_track
+* mod_flow_field.f90
+  * **module** mod_flow_field
+  * **subroutine** init_flow_field
+  * **subroutine** ncd_read_grid
+  * **subroutine** get_flow_at
+  * **subroutine** read_flow
+  * **function** timeIndex
+  * **function** check_field_time
+* mod_host.f90
+  * **subroutine** fhe
+  * **subroutine** fhe_robust
+  * **function** isintriangle
+* mod_inp.f90
+  * **module** mod_inp
+  * **subroutine** get_val
+  * **function** scan_file
+  * **function** to_upper
+  * **subroutine** pscanmsg
+* mod_io.f90
+  * **module** mod_io
+  * **subroutine** nc_open_file
+  * **subroutine** nc_close_file
+  * **subroutine** nc_new_outfile
+  * **subroutine** nc_dim
+  * **subroutine** nc_read_int_var
+  * **subroutine** nc_read_int_var2
+  * **subroutine** nc_read_real_var
+  * **subroutine** nc_read_real_var2
+  * **subroutine** nc_read_real_var3
+  * **subroutine** nc_1d_read
+  * **subroutine** nc_2d_read
+  * **subroutine** nc_3d_read
+  * **subroutine** nc_1d_write
+  * **subroutine** nc_2d_write
+  * **subroutine** handle_ncerror
+* mod_config.f90
+  * **module** mod_config
+  * **subroutine** init_model
+* mod_prec.f90
+  * **module** mod_prec
+* interp_procs.f90
+  * **subroutine** traject
+  * **subroutine** traject_2d
+  * **subroutine** random_walk
+  * **subroutine** interp_v
+  * **subroutine** interp_2d_v
+  * **subroutine** interp_elh
+  * **subroutine** gauss_random
 
